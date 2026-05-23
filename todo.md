@@ -1,0 +1,6 @@
+- [x] Crear estructura base FastAPI
+- [x] Implementar modelos y base de datos
+- [x] Crear API de personas y nóminas
+- [x] Añadir gestión local de PDFs
+- [x] Montar frontend Jinja funcional
+- [x] Validar arranque y flujos básicos

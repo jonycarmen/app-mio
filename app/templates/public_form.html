@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+{% block title %}Acceso personal{% endblock %}
+{% block content %}
+<section class="public-shell">
+    <div class="public-hero">
+        <span class="public-badge">Acceso personal seguro</span>
+        <h1>Hola, {{ person.full_name }}</h1>
+        <p class="page-header-sub">Completa o actualiza tus datos y sube tus documentos o fotos desde este dispositivo.</p>
+    </div>
+
+    <div class="public-grid">
+        <section class="card">
+            <div class="card-title">Tus datos</div>
+            <form id="publicPersonForm" class="public-form" data-token="{{ token }}">
+                <div class="grid">
+                    <label class="field">DNI
+                        <input type="text" name="dni" value="{{ person.dni or '' }}" placeholder="Ej: 12345678A">
+                    </label>
+                    <label class="field">Pasaporte
+                        <input type="text" name="passport" value="{{ person.passport or '' }}" placeholder="Ej: AB123456">
+                    </label>
+                </div>
+
+                <div class="section-header">
+                    <h2>Cuentas bancarias</h2>
+                    <button type="button" class="button secondary btn-sm" onclick="addPublicBankAccount()">+ Añadir</button>
+                </div>
+                <div id="publicBankAccounts">
+                    {% for account in person.bank_accounts %}
+                    <div class="repeatable bank-account">
+                        <input type="text" name="bank_name" placeholder="Banco" value="{{ account.bank_name or '' }}">
+                        <input type="text" name="iban" placeholder="IBAN" value="{{ account.iban or '' }}">
+                        <input type="text" name="account_number" placeholder="Número de cuenta" value="{{ account.account_number or '' }}">
+                        <input type="text" name="notes" placeholder="Notas" value="{{ account.notes or '' }}">
+                        <button type="button" class="btn-remove-row" onclick="removeRow(this)" title="Eliminar fila">×</button>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <div class="section-header">
+                    <h2>Wallets</h2>
+                    <button type="button" class="button secondary btn-sm" onclick="addPublicWallet()">+ Añadir</button>
+                </div>
+                <div id="publicWallets">
+                    {% for wallet in person.wallet_addresses %}
+                    <div class="repeatable wallet">
+                        <input type="text" name="network" placeholder="Red" value="{{ wallet.network or '' }}">
+                        <input type="text" name="address" placeholder="Dirección" value="{{ wallet.address }}">
+                        <input type="text" name="label" placeholder="Etiqueta" value="{{ wallet.label or '' }}">
+                        <input type="text" name="wallet_notes" placeholder="Notas" value="{{ wallet.notes or '' }}">
+                        <button type="button" class="btn-remove-row" onclick="removeRow(this)" title="Eliminar fila">×</button>
+                    </div>
+                    {% endfor %}
+                </div>
+
+                <button type="submit" class="button btn-success public-submit">Guardar mis datos</button>
+            </form>
+        </section>
+
+        <section class="card">
+            <div class="card-title">Tus documentos y fotos</div>
+            <form id="publicDocumentForm" class="upload-form" data-token="{{ token }}">
+                <label class="field" style="margin:0;">
+                    <span style="font-size:.84rem;font-weight:600;color:var(--text-muted);">Archivo (PDF o imagen)</span>
+                    <div class="upload-dropzone" id="publicDropzone" role="button" tabindex="0" aria-label="Seleccionar archivo">
+                        <p>📎 Toca para seleccionar un archivo</p>
+                        <p class="drop-hint">También puedes arrastrar y soltar aquí</p>
+                        <input type="file" name="file" id="publicFileInput" accept="application/pdf,image/jpeg,image/png,image/gif,image/webp" required style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;">
+                    </div>
+                </label>
+                <div class="grid">
+                    <label class="field">Categoría
+                        <input type="text" name="category" placeholder="Ej: recibo">
+                    </label>
+                    <label class="field">Descripción
+                        <input type="text" name="description" placeholder="Breve descripción">
+                    </label>
+                </div>
+                <button type="submit" class="button btn-success public-submit">Subir archivo</button>
+            </form>
+
+            <div id="publicDocumentsEmpty" class="empty-state"{% if person.documents %} style="display:none"{% endif %}>
+                Aún no has subido ningún documento.
+            </div>
+            <ul class="item-list" id="publicDocumentsList">
+                {% for document in person.documents %}
+                <li id="public-doc-{{ document.id }}">
+                    <div class="item-list-main">
+                        <a href="/form/{{ token }}/documents/{{ document.id }}/file" target="_blank" rel="noopener">{{ document.original_filename }}</a>
+                        {% if document.category %}<div class="item-list-sub">{{ document.category }}</div>{% endif %}
+                        {% if document.description %}<div class="item-list-sub">{{ document.description }}</div>{% endif %}
+                    </div>
+                </li>
+                {% endfor %}
+            </ul>
+        </section>
+    </div>
+</section>
+
+<script src="/static/js/people.js"></script>
+<script src="/static/js/public_form.js"></script>
+{% endblock %}

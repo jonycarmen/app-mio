@@ -1,0 +1,337 @@
+{% extends "base.html" %}
+{% block title %}Copias de seguridad{% endblock %}
+
+{% block content %}
+<div class="page-header">
+  <div>
+    <h1>Copias de seguridad</h1>
+    <p class="page-header-sub">Crea, descarga y restaura backups de la base de datos y archivos</p>
+  </div>
+  <div class="page-header-actions">
+    <a href="/admin/backups/download-new" class="button btn-info" id="btn-download-direct">
+      Descargar backup ahora
+    </a>
+  </div>
+</div>
+
+<!-- ── Create + Auto-backup ─────────────────────────────────────────────── -->
+<div class="grid-detail" style="margin-bottom:1.5rem;">
+
+  <!-- Crear backup manual -->
+  <div class="card">
+    <div class="card-title">Crear backup manual</div>
+    <form id="form-create-backup" autocomplete="off">
+      <label class="field" style="margin-bottom:.85rem;">
+        Ruta de destino
+        <input
+          type="text"
+          id="input-dest"
+          name="destination_path"
+          placeholder="ej: C:\Users\cadey\OneDrive\Backups"
+          value="{{ last_destination }}"
+          required
+        >
+        <span style="font-size:.77rem;color:var(--text-muted);font-weight:400;margin-top:.25rem;line-height:1.4;">
+          Carpeta local, USB (ej: <code>E:\backups</code>) o carpeta de nube sincronizada
+          (OneDrive, Google Drive, Dropbox…). La ruta se guarda automáticamente.
+        </span>
+      </label>
+      <button type="submit" class="button btn-success" id="btn-create-backup" style="width:100%;justify-content:center;">
+        <span id="btn-backup-text">Crear backup</span>
+        <span id="btn-backup-spinner" style="display:none;">Creando&hellip;</span>
+      </button>
+    </form>
+    <div id="backup-result" style="margin-top:.75rem;display:none;"></div>
+    <p style="font-size:.78rem;color:var(--text-muted);margin-top:.75rem;">
+      El backup incluye: <strong>app.db</strong>, <strong>storage/pdfs/</strong> y <strong>.env</strong>
+      empaquetados en un ZIP con marca de tiempo.
+    </p>
+  </div>
+
+  <!-- Backup automático -->
+  <div class="card">
+    <div class="card-title">Backup automático</div>
+    {% if auto_enabled %}
+    <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.85rem;">
+      <span class="badge badge-success">Activo</span>
+      <span style="font-size:.85rem;color:var(--text-muted);">cada {{ auto_interval }}h</span>
+    </div>
+    <p style="font-size:.875rem;color:var(--text-muted);margin-bottom:.4rem;">Destino configurado:</p>
+    <code style="font-size:.82rem;background:#f1f5f9;padding:.3rem .6rem;border-radius:6px;display:block;word-break:break-all;">{{ auto_path }}</code>
+    {% else %}
+    <div style="display:flex;gap:.5rem;align-items:center;margin-bottom:.85rem;">
+      <span class="badge badge-muted">Desactivado</span>
+    </div>
+    <p style="font-size:.875rem;color:var(--text-muted);margin-bottom:.65rem;">
+      Para activar backups automáticos, añade estas variables en <code>.env</code> y reinicia la app:
+    </p>
+    <pre style="background:#f1f5f9;padding:.85rem 1rem;border-radius:var(--radius);font-size:.78rem;overflow-x:auto;line-height:1.6;border:1px solid var(--border);">BACKUP_AUTO_ENABLED=true
+BACKUP_AUTO_PATH=C:\ruta\destino
+BACKUP_AUTO_INTERVAL_HOURS=24</pre>
+    {% endif %}
+  </div>
+
+</div>
+
+<!-- ── Restaurar backup ──────────────────────────────────────────────────── -->
+<div class="card" style="margin-bottom:1.5rem;">
+  <div class="card-title" style="color:var(--danger);">
+    Restaurar desde backup
+  </div>
+  <div style="background:#fff5f5;border:1.5px solid #fecaca;border-radius:var(--radius);padding:.85rem 1rem;margin-bottom:1.25rem;font-size:.875rem;color:#b91c1c;display:flex;gap:.6rem;align-items:flex-start;">
+    <span style="font-size:1rem;flex-shrink:0;">&#9888;</span>
+    <span><strong>ADVERTENCIA:</strong> La restauración reemplaza la base de datos y los archivos actuales. Esta acción no se puede deshacer. Se recomienda crear un backup previo.</span>
+  </div>
+
+  <div class="grid-detail">
+    <!-- Subir archivo ZIP -->
+    <div>
+      <h2 style="font-size:.88rem;color:var(--text-muted);margin-bottom:.65rem;">Subir archivo ZIP</h2>
+      <form id="form-restore-upload" style="display:grid;gap:.65rem;">
+        <label class="field">
+          Archivo de backup (.zip)
+          <input type="file" id="restore-file" accept=".zip" required>
+        </label>
+        <button type="submit" class="button btn-danger" id="btn-restore-upload" style="justify-content:center;">
+          Restaurar desde archivo
+        </button>
+      </form>
+    </div>
+
+    <!-- Restaurar desde ruta local -->
+    <div>
+      <h2 style="font-size:.88rem;color:var(--text-muted);margin-bottom:.65rem;">Desde ruta de disco</h2>
+      <form id="form-restore-path" style="display:grid;gap:.65rem;">
+        <label class="field">
+          Ruta al archivo ZIP
+          <input
+            type="text"
+            id="restore-path"
+            name="zip_path"
+            placeholder="ej: E:\backups\backup_2026-01-01_12-00-00.zip"
+          >
+        </label>
+        <button type="submit" class="button btn-danger" id="btn-restore-path" style="justify-content:center;">
+          Restaurar desde ruta
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <div id="restore-result" style="margin-top:.85rem;display:none;"></div>
+</div>
+
+<!-- ── Historial de backups ──────────────────────────────────────────────── -->
+<div style="display:flex;align-items:center;gap:.65rem;margin-bottom:.75rem;">
+  <h2 style="margin-bottom:0;">Historial de backups</h2>
+  <span class="badge badge-muted">{{ backups|length }}</span>
+</div>
+
+{% if backups %}
+<div class="table-wrap">
+  <table class="table">
+    <thead>
+      <tr>
+        <th>Nombre del archivo</th>
+        <th>Fecha</th>
+        <th>Tamaño</th>
+        <th>Destino</th>
+        <th>Tipo</th>
+        <th>Estado</th>
+        <th>Acciones</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for b in backups %}
+      <tr id="row-{{ b.id }}">
+        <td style="font-family:monospace;font-size:.82rem;">{{ b.filename }}</td>
+        <td style="font-size:.85rem;white-space:nowrap;">
+          {{ b.created_at.strftime('%d/%m/%Y %H:%M') if b.created_at else '—' }}
+        </td>
+        <td style="font-size:.85rem;white-space:nowrap;">
+          {% if b.size_bytes >= 1048576 %}
+            {{ (b.size_bytes / 1048576) | round(2) }} MB
+          {% elif b.size_bytes >= 1024 %}
+            {{ (b.size_bytes / 1024) | round(1) }} KB
+          {% else %}
+            {{ b.size_bytes }} B
+          {% endif %}
+        </td>
+        <td
+          style="font-size:.78rem;color:var(--text-muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"
+          title="{{ b.destination_path }}"
+        >{{ b.destination_path }}</td>
+        <td>
+          {% if b.type == 'auto' %}
+            <span class="badge badge-primary">auto</span>
+          {% elif b.type == 'download' %}
+            <span class="badge" style="background:#e0f2fe;color:#0369a1;">descarga</span>
+          {% else %}
+            <span class="badge badge-muted">manual</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if b.status == 'ok' %}
+            <span class="badge badge-success">ok</span>
+          {% else %}
+            <span class="badge" style="background:#fee2e2;color:#dc2626;">error</span>
+          {% endif %}
+        </td>
+        <td>
+          <div class="actions">
+            {% if b.full_path and b.type != 'download' %}
+            <a href="/admin/backups/{{ b.id }}/download" class="button btn-sm btn-info">Descargar</a>
+            {% endif %}
+            <button class="button btn-sm btn-danger" onclick="deleteBackup({{ b.id }})">Eliminar</button>
+          </div>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="empty-state">
+  No hay backups registrados. Crea tu primer backup con el formulario de arriba.
+</div>
+{% endif %}
+
+<script>
+// ── Create backup ─────────────────────────────────────────────────────────────
+document.getElementById('form-create-backup').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const dest = document.getElementById('input-dest').value.trim();
+  if (!dest) { showToast('Introduce una ruta de destino', 'error'); return; }
+
+  const btnText    = document.getElementById('btn-backup-text');
+  const btnSpinner = document.getElementById('btn-backup-spinner');
+  const btn        = document.getElementById('btn-create-backup');
+  btnText.style.display    = 'none';
+  btnSpinner.style.display = '';
+  btn.disabled = true;
+
+  const resultBox = document.getElementById('backup-result');
+  resultBox.style.display = 'none';
+
+  try {
+    const fd = new FormData();
+    fd.append('destination_path', dest);
+    const res  = await fetch('/admin/backups/create', { method: 'POST', body: fd });
+    const data = await res.json();
+
+    resultBox.style.display = '';
+    if (data.ok) {
+      const mb = (data.size_bytes / 1048576).toFixed(2);
+      resultBox.innerHTML = `<div style="background:#dcfce7;color:#15803d;padding:.65rem .9rem;border-radius:8px;font-size:.875rem;">
+        Backup guardado: <strong>${data.filename}</strong> &mdash; ${mb} MB
+      </div>`;
+      showToast('Backup creado correctamente', 'success');
+      setTimeout(() => location.reload(), 1600);
+    } else {
+      resultBox.innerHTML = `<div style="background:#fee2e2;color:#dc2626;padding:.65rem .9rem;border-radius:8px;font-size:.875rem;">${data.message}</div>`;
+      showToast(data.message || 'Error al crear backup', 'error');
+    }
+  } catch {
+    showToast('Error de conexión', 'error');
+  } finally {
+    btnText.style.display    = '';
+    btnSpinner.style.display = 'none';
+    btn.disabled = false;
+  }
+});
+
+// ── Restore from uploaded file ────────────────────────────────────────────────
+document.getElementById('form-restore-upload').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const file = document.getElementById('restore-file').files[0];
+  if (!file) return;
+  if (!await confirmRestoreDialog()) return;
+
+  const btn = document.getElementById('btn-restore-upload');
+  btn.disabled    = true;
+  btn.textContent = 'Restaurando\u2026';
+
+  const fd = new FormData();
+  fd.append('file', file);
+  await _doRestore('/admin/backups/restore-upload', fd, btn, 'Restaurar desde archivo');
+});
+
+// ── Restore from path ─────────────────────────────────────────────────────────
+document.getElementById('form-restore-path').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const path = document.getElementById('restore-path').value.trim();
+  if (!path) return;
+  if (!await confirmRestoreDialog()) return;
+
+  const btn = document.getElementById('btn-restore-path');
+  btn.disabled    = true;
+  btn.textContent = 'Restaurando\u2026';
+
+  const fd = new FormData();
+  fd.append('zip_path', path);
+  await _doRestore('/admin/backups/restore-path', fd, btn, 'Restaurar desde ruta');
+});
+
+async function _doRestore(url, fd, btn, originalText) {
+  const resultBox = document.getElementById('restore-result');
+  resultBox.style.display = 'none';
+  try {
+    const res  = await fetch(url, { method: 'POST', body: fd });
+    const data = await res.json();
+    resultBox.style.display = '';
+    if (data.ok) {
+      resultBox.innerHTML = `<div style="background:#dcfce7;color:#15803d;padding:.75rem 1rem;border-radius:8px;font-size:.875rem;">
+        <strong>Restauracion completada.</strong> ${data.message}
+      </div>`;
+      showToast('Restauracion exitosa', 'success');
+    } else {
+      resultBox.innerHTML = `<div style="background:#fee2e2;color:#dc2626;padding:.75rem 1rem;border-radius:8px;font-size:.875rem;">${data.message}</div>`;
+      showToast(data.message, 'error');
+    }
+  } catch {
+    showToast('Error de conexion', 'error');
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = originalText;
+  }
+}
+
+// ── Delete record ─────────────────────────────────────────────────────────────
+async function deleteBackup(id) {
+  const ok = await confirmDialog('Eliminar el registro de este backup. El archivo ZIP en disco NO se elimina.');
+  if (!ok) return;
+  const res = await fetch(`/admin/backups/${id}`, { method: 'DELETE' });
+  const data = await res.json();
+  if (data.ok) {
+    document.getElementById(`row-${id}`)?.remove();
+    showToast('Registro eliminado', 'success');
+  } else {
+    showToast('Error al eliminar', 'error');
+  }
+}
+
+// ── Restore confirm dialog (custom, more explicit than generic confirmDialog) ─
+function confirmRestoreDialog() {
+  return new Promise(resolve => {
+    const root = document.getElementById('modal-root');
+    root.innerHTML = `
+      <div class="modal-overlay" id="modal-overlay">
+        <div class="modal-box">
+          <h3 style="color:var(--danger);">Confirmar restauracion</h3>
+          <p>Esta accion <strong>reemplazara</strong> la base de datos y los archivos actuales con los del backup seleccionado.</p>
+          <p style="margin-top:.5rem;color:var(--danger);">Esta operacion no se puede deshacer.</p>
+          <div class="modal-actions" style="margin-top:1.5rem;">
+            <button class="button btn-outline" id="modal-cancel">Cancelar</button>
+            <button class="button btn-danger"  id="modal-confirm">Si, restaurar</button>
+          </div>
+        </div>
+      </div>`;
+    document.getElementById('modal-cancel').onclick  = () => { root.innerHTML = ''; resolve(false); };
+    document.getElementById('modal-confirm').onclick = () => { root.innerHTML = ''; resolve(true);  };
+    document.getElementById('modal-overlay').onclick = (e) => {
+      if (e.target === e.currentTarget) { root.innerHTML = ''; resolve(false); }
+    };
+  });
+}
+</script>
+{% endblock %}

@@ -1,0 +1,11 @@
+<resources>
+    <!-- App name shown under the launcher icon -->
+    <string name="app_name">Mi App</string>
+    <!-- Short name for tight spaces (e.g. home screen on some launchers) -->
+    <string name="app_short_name">MiApp</string>
+    <!-- Title shown in the status bar while the splash is displayed -->
+    <string name="title_activity_main">Mi App</string>
+
+    <!-- Custom tab / deep link host (used in intent-filter) -->
+    <string name="custom_url_scheme">miapp</string>
+</resources>

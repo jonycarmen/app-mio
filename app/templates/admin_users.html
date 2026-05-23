@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Usuarios registrados{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>Usuarios</h1>
+        <p class="page-header-sub">
+            {{ users|length }} usuario{% if users|length != 1 %}s{% endif %}
+            {% if filter_tag %} &mdash; etiqueta: <strong>{{ filter_tag }}</strong>{% endif %}
+            {% if filter_color %} &mdash; color: <span style="display:inline-block;width:12px;height:12px;border-radius:50%;background:{{ filter_color }};vertical-align:middle;"></span>{% endif %}
+        </p>
+    </div>
+    <div class="page-header-actions">
+        <a href="/admin/invitations" class="button btn-success">+ Crear invitación</a>
+    </div>
+</section>
+
+<!-- Filters -->
+<div style="display:flex;gap:.75rem;flex-wrap:wrap;margin-bottom:1.2rem;align-items:center;">
+    <form method="GET" action="/admin/users" style="display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;">
+        <select name="tag" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:7px;padding:.42rem .75rem;font-size:.875rem;">
+            <option value="">Todas las etiquetas</option>
+            {% for t in all_tags %}
+            <option value="{{ t }}" {% if filter_tag == t %}selected{% endif %}>{{ t }} ({{ tag_counts[t] }})</option>
+            {% endfor %}
+        </select>
+        <select name="color" style="background:#1e293b;color:#e2e8f0;border:1px solid #334155;border-radius:7px;padding:.42rem .75rem;font-size:.875rem;">
+            <option value="">Todos los colores</option>
+            {% for c in all_colors %}
+            <option value="{{ c }}" {% if filter_color == c %}selected{% endif %}>
+                ● {{ c }} ({{ color_counts[c] }})
+            </option>
+            {% endfor %}
+        </select>
+        <button type="submit" class="button btn-outline" style="color:#94a3b8;border-color:#334155;">Filtrar</button>
+        {% if filter_tag or filter_color %}
+        <a href="/admin/users" class="button btn-outline" style="color:#ef4444;border-color:#334155;">Limpiar filtro</a>
+        {% endif %}
+    </form>
+
+    {% if tag_counts %}
+    <div style="display:flex;gap:.4rem;flex-wrap:wrap;">
+        {% for tag, cnt in tag_counts.items() %}
+        <a href="/admin/users?tag={{ tag }}"
+           style="display:inline-flex;align-items:center;gap:.3rem;padding:.25rem .65rem;border-radius:20px;font-size:.78rem;font-weight:600;
+                  background:{% if filter_tag == tag %}rgba(99,102,241,.25){% else %}rgba(255,255,255,.06){% endif %};
+                  color:{% if filter_tag == tag %}#a5b4fc{% else %}#94a3b8{% endif %};
+                  border:1px solid {% if filter_tag == tag %}#6366f1{% else %}#334155{% endif %};
+                  text-decoration:none;">
+            {{ tag }} <span style="opacity:.7;">{{ cnt }}</span>
+        </a>
+        {% endfor %}
+    </div>
+    {% endif %}
+</div>
+
+<div class="table-wrap">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Nombre</th>
+                <th>Email</th>
+                <th>Teléfono</th>
+                <th>Estado</th>
+                <th>Etiqueta admin</th>
+                <th>Registrado</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for u in users %}
+            <tr>
+                <td style="color:var(--text-muted);">{{ u.id }}</td>
+                <td>
+                    <div style="display:flex;align-items:center;gap:.6rem;">
+                        <!-- Color dot: admin_color if set, else theme_color -->
+                        <div style="width:32px;height:32px;border-radius:50%;
+                                    background:{{ u.admin_color or u.theme_color or '#3563e9' }};
+                                    display:flex;align-items:center;justify-content:center;
+                                    color:#fff;font-weight:700;font-size:.85rem;overflow:hidden;flex-shrink:0;
+                                    {% if u.admin_color %}box-shadow:0 0 0 2px #0f172a, 0 0 0 4px {{ u.admin_color }};{% endif %}">
+                            {{ u.display_name[0]|upper }}
+                        </div>
+                        <div>
+                            <a href="/admin/users/{{ u.id }}" style="font-weight:600;display:block;">{{ u.display_name }}</a>
+                            {% if u.admin_tag %}
+                            <span style="display:inline-block;padding:.15rem .55rem;border-radius:12px;font-size:.73rem;font-weight:600;margin-top:.15rem;
+                                         background:{{ u.admin_color or '#334155' }}22;
+                                         color:{{ u.admin_color or '#94a3b8' }};
+                                         border:1px solid {{ u.admin_color or '#334155' }}44;">
+                                {{ u.admin_tag }}
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+                </td>
+                <td>{{ u.email or '—' }}</td>
+                <td>{{ u.phone or '—' }}</td>
+                <td>
+                    {% if u.is_active %}
+                    <span class="badge badge-success">Activo</span>
+                    {% else %}
+                    <span class="badge badge-muted">Inactivo</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if u.admin_color or u.admin_tag %}
+                    <span style="display:inline-flex;align-items:center;gap:.4rem;">
+                        {% if u.admin_color %}
+                        <span style="width:12px;height:12px;border-radius:50%;background:{{ u.admin_color }};display:inline-block;flex-shrink:0;"></span>
+                        {% endif %}
+                        {% if u.admin_tag %}
+                        <span style="font-size:.82rem;color:#cbd5e1;">{{ u.admin_tag }}</span>
+                        {% endif %}
+                    </span>
+                    {% else %}
+                    <span style="color:#475569;font-size:.82rem;">—</span>
+                    {% endif %}
+                </td>
+                <td style="color:var(--text-muted);font-size:.83rem;">{{ u.created_at.strftime('%d/%m/%Y') if u.created_at else '—' }}</td>
+                <td class="actions">
+                    <a href="/admin/users/{{ u.id }}" class="button btn-sm btn-info">Ver / Editar</a>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" class="empty-state">No hay usuarios registrados todavía. <a href="/admin/invitations">Crea una invitación</a>.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

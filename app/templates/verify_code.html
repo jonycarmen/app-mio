@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="/static/manifest.json">
+    <title>Verificar código</title>
+    <link rel="stylesheet" href="/static/css/app.css">
+    <style>
+        body { display: flex; align-items: center; justify-content: center; min-height: 100vh; min-height: 100dvh; background: var(--bg, #0f172a); padding: 1rem env(safe-area-inset-right,0) 1rem env(safe-area-inset-left,0); }
+        .card { background: var(--card-bg, #1e293b); border-radius: 12px; padding: 2.5rem 2rem; width: 100%; max-width: 400px; box-shadow: 0 8px 32px rgba(0,0,0,.4); }
+        .card h1 { margin: 0 0 .25rem; font-size: 1.4rem; color: var(--text, #e2e8f0); }
+        .card .subtitle { margin: 0 0 .6rem; font-size: .85rem; color: var(--text-muted, #94a3b8); }
+        .card .hint { margin: 0 0 2rem; font-size: .8rem; color: #64748b; }
+        .alert-error { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.3); border-radius: 6px; padding: .6rem .9rem; margin-bottom: 1.2rem; color: #fca5a5; font-size: .88rem; }
+        /* Six individual digit boxes — larger on mobile for easy tapping */
+        .code-inputs { display: flex; gap: .5rem; justify-content: center; margin: 1.5rem 0 1.8rem; }
+        .code-inputs input {
+            width: 48px; height: 58px; text-align: center; font-size: 1.6rem; font-weight: 700;
+            border-radius: 8px; border: 2px solid var(--border, #334155);
+            background: var(--input-bg, #0f172a); color: var(--text, #e2e8f0);
+            caret-color: var(--primary, #6366f1);
+            transition: border-color .15s, box-shadow .15s;
+            /* Prevent iOS font-size zoom while keeping large visual size */
+            font-size: clamp(1.2rem, 5vw, 1.6rem);
+            -webkit-appearance: none;
+        }
+        .code-inputs input:focus { outline: none; border-color: var(--primary, #6366f1); box-shadow: 0 0 0 3px rgba(99,102,241,.3); }
+        .code-inputs input.filled { border-color: #4f46e5; }
+        .btn-submit { width: 100%; padding: .75rem; border-radius: 6px; border: none; background: var(--primary, #6366f1); color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; min-height: 48px; }
+        .btn-submit:hover { background: #4f46e5; }
+        .btn-submit:disabled { opacity: .5; cursor: not-allowed; }
+        .back-link { display: flex; align-items: center; justify-content: center; text-align: center; margin-top: 1.2rem; font-size: .85rem; color: var(--text-muted, #94a3b8); text-decoration: none; min-height: 44px; }
+        .back-link:hover { color: var(--primary, #6366f1); }
+        /* Responsive: on very small screens shrink digit boxes */
+        @media (max-width: 380px) {
+            .code-inputs input { width: 40px; height: 50px; }
+            .code-inputs { gap: .3rem; }
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>People Manager</h1>
+        <p class="subtitle">Verificar código</p>
+        <p class="hint">Ingresa el código de 6 dígitos que recibiste. Expira en 15 minutos.</p>
+
+        {% if error %}
+        <div class="alert-error">{{ error }}</div>
+        {% endif %}
+
+        <form method="POST" action="/admin/verify-code" id="verify-form">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <input type="hidden" name="code" id="code-hidden">
+
+            <div class="code-inputs" aria-label="Código de 6 dígitos">
+                <input type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" class="digit" autocomplete="off" aria-label="Dígito 1">
+                <input type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" class="digit" autocomplete="off" aria-label="Dígito 2">
+                <input type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" class="digit" autocomplete="off" aria-label="Dígito 3">
+                <input type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" class="digit" autocomplete="off" aria-label="Dígito 4">
+                <input type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" class="digit" autocomplete="off" aria-label="Dígito 5">
+                <input type="text" inputmode="numeric" pattern="[0-9]" maxlength="1" class="digit" autocomplete="off" aria-label="Dígito 6">
+            </div>
+
+            <button type="submit" class="btn-submit" id="submit-btn" disabled>Verificar</button>
+        </form>
+
+        <a href="/admin/forgot-password" class="back-link">← Solicitar nuevo código</a>
+    </div>
+
+    <script>
+        const digits = document.querySelectorAll('.digit');
+        const codeHidden = document.getElementById('code-hidden');
+        const submitBtn = document.getElementById('submit-btn');
+        const form = document.getElementById('verify-form');
+
+        digits[0].focus();
+
+        function updateHidden() {
+            const val = Array.from(digits).map(d => d.value).join('');
+            codeHidden.value = val;
+            submitBtn.disabled = val.length < 6;
+            digits.forEach(d => d.classList.toggle('filled', d.value !== ''));
+        }
+
+        digits.forEach((input, i) => {
+            input.addEventListener('input', e => {
+                input.value = input.value.replace(/\D/g, '').slice(-1);
+                updateHidden();
+                if (input.value && i < digits.length - 1) digits[i + 1].focus();
+            });
+            input.addEventListener('keydown', e => {
+                if (e.key === 'Backspace' && !input.value && i > 0) {
+                    digits[i - 1].focus();
+                    digits[i - 1].value = '';
+                    updateHidden();
+                }
+                if (e.key === 'ArrowLeft'  && i > 0)               digits[i - 1].focus();
+                if (e.key === 'ArrowRight' && i < digits.length-1) digits[i + 1].focus();
+            });
+            input.addEventListener('paste', e => {
+                e.preventDefault();
+                const pasted = (e.clipboardData || window.clipboardData).getData('text').replace(/\D/g, '');
+                if (pasted.length === 6) {
+                    digits.forEach((d, idx) => { d.value = pasted[idx] || ''; });
+                    digits[5].focus();
+                    updateHidden();
+                }
+            });
+        });
+
+        form.addEventListener('submit', e => { if (codeHidden.value.length !== 6) e.preventDefault(); });
+    </script>
+</body>
+</html>

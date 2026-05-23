@@ -1,0 +1,234 @@
+{% extends "base.html" %}
+{% block title %}Invitaciones{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>Invitaciones</h1>
+        <p class="page-header-sub">Gestión de enlaces de registro</p>
+    </div>
+</section>
+
+{% if error %}<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:.65rem 1rem;margin-bottom:1rem;color:var(--danger);font-size:.88rem;">{{ error }}</div>{% endif %}
+{% if success %}
+<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:.65rem 1rem;margin-bottom:1rem;color:var(--success);font-size:.88rem;">
+    {{ success }}
+    {% if new_token %}
+    <br>
+    <strong>Enlace corto (para móvil):</strong>
+    <input type="text" readonly value="{{ request.base_url }}i/{{ new_token }}"
+           style="margin-top:.4rem;font-family:monospace;font-size:.82rem;background:#f8fafc;color:#0f172a;padding:.35rem .6rem;border-radius:5px;border:1px solid var(--border);width:100%;"
+           onclick="this.select()">
+    <small style="color:var(--text-muted);font-size:.75rem;">También funciona: {{ request.base_url }}register/{{ new_token }}</small>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- ─── Create form ─── -->
+<div class="card">
+    <div class="card-title">Crear nueva invitación</div>
+    <form method="POST" action="/admin/invitations" id="invForm"
+          style="display:flex;flex-direction:column;gap:.85rem;">
+
+        <!-- Type selector -->
+        <div style="display:flex;gap:.5rem;">
+            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.9rem;">
+                <input type="radio" name="inv_type" value="personal" id="typePersonal" checked
+                       onchange="toggleInvType()"> Personal
+            </label>
+            <label style="display:flex;align-items:center;gap:.4rem;cursor:pointer;font-size:.9rem;margin-left:.75rem;">
+                <input type="radio" name="inv_type" value="group" id="typeGroup"
+                       onchange="toggleInvType()"> Grupal
+            </label>
+        </div>
+
+        <!-- Shared: expiry -->
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;align-items:end;">
+            <!-- Personal: email -->
+            <label class="field" id="fieldEmail">
+                Email del invitado (opcional)
+                <input type="email" name="email" placeholder="correo@ejemplo.com">
+            </label>
+
+            <!-- Group: label -->
+            <label class="field" id="fieldLabel" style="display:none;">
+                Nombre del grupo
+                <input type="text" name="label" placeholder="Ej: Equipo Marketing">
+            </label>
+
+            <!-- Group: max uses -->
+            <label class="field" id="fieldMaxUses" style="display:none;">
+                Máximo de usos <span style="font-size:.75rem;color:var(--text-muted);">(vacío = 200, máx. absoluto 200)</span>
+                <input type="number" name="max_uses" placeholder="Máx. 200" min="1" max="200">
+            </label>
+
+            <!-- Shared: validity -->
+            <label class="field">
+                Validez (horas)
+                <input type="number" name="expires_hours" value="72" min="1" max="720">
+            </label>
+
+            <div style="padding-bottom:.05rem;">
+                <button type="submit" class="button btn-success">Crear invitación</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+<!-- ─── Detail panel for group invitation ─── -->
+{% if inv_detail %}
+<div class="card" style="border:1px solid var(--border);border-left:4px solid var(--primary);">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:.75rem;">
+        <div>
+            <span style="font-weight:600;font-size:1.05rem;">
+                {% if inv_detail.label %}{{ inv_detail.label }}{% else %}Invitación grupal #{{ inv_detail.id }}{% endif %}
+            </span>
+            <span class="badge" style="background:rgba(99,102,241,.12);color:#6366f1;margin-left:.5rem;">Grupal</span>
+            {% if inv_detail.status == 'pending' %}
+            <span class="badge badge-primary" style="margin-left:.25rem;">Activa</span>
+            {% elif inv_detail.status == 'used' %}
+            <span class="badge badge-success" style="margin-left:.25rem;">Límite alcanzado</span>
+            {% else %}
+            <span class="badge badge-muted" style="margin-left:.25rem;">Expirada</span>
+            {% endif %}
+        </div>
+        <a href="/admin/invitations" class="button btn-sm btn-outline">✕ Cerrar</a>
+    </div>
+
+    <div style="font-size:.85rem;color:var(--text-muted);margin-bottom:.9rem;display:flex;gap:1.5rem;flex-wrap:wrap;">
+        <span>Token: <code>{{ inv_detail.token[:8] }}…</code></span>
+        <span>Registrados:
+            <strong style="color:var(--text);">
+                {{ inv_detail.current_uses }}
+                {% if inv_detail.max_uses %}/ {{ inv_detail.max_uses }}{% else %}(sin límite){% endif %}
+            </strong>
+        </span>
+        <span>Expira: {{ inv_detail.expires_at.strftime('%d/%m/%Y %H:%M') }}</span>
+        <span>Creada: {{ inv_detail.created_at.strftime('%d/%m/%Y %H:%M') if inv_detail.created_at else '—' }}</span>
+    </div>
+
+    {% if inv_detail.status == 'pending' %}
+    <div style="margin-bottom:.9rem;">
+        <strong style="font-size:.82rem;">Enlace de invitación (corto):</strong>
+        <input type="text" readonly value="{{ request.base_url }}i/{{ inv_detail.token }}"
+               style="display:block;margin-top:.3rem;font-family:monospace;font-size:.8rem;background:#f8fafc;color:#0f172a;padding:.3rem .55rem;border-radius:5px;border:1px solid var(--border);width:100%;"
+               onclick="this.select()">
+        <small style="color:var(--text-muted);font-size:.75rem;">También: {{ request.base_url }}register/{{ inv_detail.token }}</small>
+    </div>
+    {% endif %}
+
+    {% set members = inv_detail.registered_users %}
+    {% if members %}
+    <div>
+        <div style="font-weight:600;font-size:.88rem;margin-bottom:.5rem;">Usuarios registrados ({{ members|length }})</div>
+        <div style="display:flex;flex-direction:column;gap:.35rem;">
+            {% for u in members %}
+            <div style="display:flex;align-items:center;gap:.7rem;padding:.4rem .6rem;background:var(--surface);border-radius:6px;font-size:.85rem;">
+                <span style="width:2rem;height:2rem;border-radius:50%;background:{{ u.theme_color }};display:inline-flex;align-items:center;justify-content:center;color:#fff;font-weight:600;font-size:.8rem;flex-shrink:0;">
+                    {{ u.display_name[0]|upper }}
+                </span>
+                <span style="flex:1;">
+                    <a href="/admin/users/{{ u.id }}" style="color:var(--text);text-decoration:none;font-weight:500;">{{ u.display_name }}</a>
+                    {% if u.email %}<span style="color:var(--text-muted);margin-left:.4rem;">{{ u.email }}</span>{% endif %}
+                    {% if u.phone %}<span style="color:var(--text-muted);margin-left:.4rem;">{{ u.phone }}</span>{% endif %}
+                </span>
+                <span style="color:var(--text-muted);font-size:.78rem;">{{ u.created_at.strftime('%d/%m/%Y') if u.created_at else '' }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% else %}
+    <p style="color:var(--text-muted);font-size:.85rem;">Aún no se ha registrado nadie con esta invitación.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+<!-- ─── Invitations table ─── -->
+<div class="table-wrap">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Tipo</th>
+                <th>Token / Etiqueta</th>
+                <th>Email / Usos</th>
+                <th>Estado</th>
+                <th>Expira</th>
+                <th>Creada</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for inv in invitations %}
+            <tr>
+                <td style="color:var(--text-muted);">{{ inv.id }}</td>
+                <td>
+                    {% if inv.type == 'group' %}
+                    <span class="badge" style="background:rgba(99,102,241,.12);color:#6366f1;">Grupal</span>
+                    {% else %}
+                    <span class="badge" style="background:rgba(100,116,139,.1);color:#64748b;">Personal</span>
+                    {% endif %}
+                </td>
+                <td>
+                    <code style="font-size:.8rem;color:var(--primary);">{{ inv.token[:8] }}…</code>
+                    {% if inv.label %}
+                    <span style="margin-left:.4rem;font-size:.82rem;color:var(--text);">{{ inv.label }}</span>
+                    {% endif %}
+                    {% if inv.status == 'pending' %}
+                    <button class="button btn-sm btn-outline" style="margin-left:.4rem;font-size:.72rem;"
+                            onclick="copyInv('{{ request.base_url }}i/{{ inv.token }}')" title="Copiar enlace corto">📋</button>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if inv.type == 'group' %}
+                    <span style="font-size:.83rem;">
+                        <strong>{{ inv.current_uses }}</strong>
+                        {% if inv.max_uses %}/ {{ inv.max_uses }} usos{% else %}registrados (sin límite){% endif %}
+                    </span>
+                    {% else %}
+                    {{ inv.email or '—' }}
+                    {% endif %}
+                </td>
+                <td>
+                    {% if inv.status == 'pending' %}
+                    <span class="badge badge-primary">Pendiente</span>
+                    {% elif inv.status == 'used' %}
+                    <span class="badge badge-success">{% if inv.type == 'group' %}Límite{% else %}Usada{% endif %}</span>
+                    {% else %}
+                    <span class="badge badge-muted">Expirada</span>
+                    {% endif %}
+                </td>
+                <td style="font-size:.83rem;color:{% if inv.expires_at < now %}var(--danger){% else %}var(--text-muted){% endif %};">
+                    {{ inv.expires_at.strftime('%d/%m/%Y %H:%M') }}
+                </td>
+                <td style="color:var(--text-muted);font-size:.83rem;">{{ inv.created_at.strftime('%d/%m/%Y %H:%M') if inv.created_at else '—' }}</td>
+                <td style="display:flex;gap:.4rem;align-items:center;flex-wrap:wrap;">
+                    {% if inv.type == 'group' %}
+                    <a href="/admin/invitations?detail_id={{ inv.id }}" class="button btn-sm btn-outline"
+                       title="Ver miembros">👥 Miembros</a>
+                    {% endif %}
+                    <form method="POST" action="/admin/invitations/{{ inv.id }}/delete" style="display:inline;">
+                        <button type="submit" class="button btn-sm btn-danger"
+                                onclick="return confirm('¿Eliminar esta invitación?')">Eliminar</button>
+                    </form>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="8" class="empty-state">No hay invitaciones todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script>
+function copyInv(url) {
+    navigator.clipboard.writeText(url).then(() => showToast('Enlace copiado', 'success'));
+}
+
+function toggleInvType() {
+    const isGroup = document.getElementById('typeGroup').checked;
+    document.getElementById('fieldEmail').style.display  = isGroup ? 'none' : '';
+    document.getElementById('fieldLabel').style.display  = isGroup ? ''     : 'none';
+    document.getElementById('fieldMaxUses').style.display = isGroup ? ''    : 'none';
+}
+</script>
+{% endblock %}

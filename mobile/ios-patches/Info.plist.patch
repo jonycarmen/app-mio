@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Info.plist — Patch / reference file for iOS
+  =============================================
+  After running  `npx cap add ios`  merge the keys below into
+  ios/App/App/Info.plist
+
+  IMPORTANT: Do NOT replace the whole file — only add/update the keys listed.
+-->
+<plist version="1.0">
+<dict>
+
+  <!-- ── App display name ────────────────────────────────────────── -->
+  <key>CFBundleDisplayName</key>
+  <string>Mi App</string>
+
+  <key>CFBundleName</key>
+  <string>MiApp</string>
+
+  <!-- ── Supported orientations (iPhone) ────────────────────────── -->
+  <key>UISupportedInterfaceOrientations</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <!-- Remove the two lines below to allow landscape: -->
+    <!-- <string>UIInterfaceOrientationLandscapeLeft</string>  -->
+    <!-- <string>UIInterfaceOrientationLandscapeRight</string> -->
+  </array>
+
+  <!-- ── Supported orientations (iPad) ──────────────────────────── -->
+  <key>UISupportedInterfaceOrientations~ipad</key>
+  <array>
+    <string>UIInterfaceOrientationPortrait</string>
+    <string>UIInterfaceOrientationPortraitUpsideDown</string>
+    <string>UIInterfaceOrientationLandscapeLeft</string>
+    <string>UIInterfaceOrientationLandscapeRight</string>
+  </array>
+
+  <!-- ── Camera / Photo Library permissions ──────────────────────── -->
+  <key>NSCameraUsageDescription</key>
+  <string>Mi App necesita acceso a la cámara para actualizar tu foto de perfil.</string>
+
+  <key>NSPhotoLibraryUsageDescription</key>
+  <string>Mi App necesita acceso a tus fotos para seleccionar una imagen de perfil.</string>
+
+  <key>NSPhotoLibraryAddUsageDescription</key>
+  <string>Mi App guardará fotos en tu biblioteca.</string>
+
+  <!-- ── Face ID / Touch ID (if used in the future) ──────────────── -->
+  <key>NSFaceIDUsageDescription</key>
+  <string>Usa Face ID para acceder a tu cuenta de forma más rápida y segura.</string>
+
+  <!-- ── Arbitrary network loads (allows HTTP for LAN dev) ─────────
+       Remove or set to NO for production HTTPS deployments.
+  ──────────────────────────────────────────────────────────────────── -->
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>
+    <!--
+      For production (HTTPS only), replace the above with:
+      <key>NSAllowsArbitraryLoads</key>
+      <false/>
+    -->
+  </dict>
+
+  <!-- ── Deep links: URL scheme miapp:// ─────────────────────────── -->
+  <key>CFBundleURLTypes</key>
+  <array>
+    <dict>
+      <key>CFBundleURLName</key>
+      <string>com.miapp.portal</string>
+      <key>CFBundleURLSchemes</key>
+      <array>
+        <string>miapp</string>
+      </array>
+    </dict>
+  </array>
+
+  <!-- ── Status bar ──────────────────────────────────────────────── -->
+  <key>UIStatusBarStyle</key>
+  <string>UIStatusBarStyleLightContent</string>
+
+  <key>UIViewControllerBasedStatusBarAppearance</key>
+  <false/>
+
+  <!-- ── Hide home indicator on iPhone X and later ──────────────── -->
+  <key>UIHomeIndicatorAutoHidden</key>
+  <false/>
+
+</dict>
+</plist>

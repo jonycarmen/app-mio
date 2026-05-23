@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="manifest" href="/static/manifest.json">
+    {% set _s = request.state.app_settings if request.state is defined and request.state.app_settings is defined else None %}
+    <title>{{ _s.app_name if _s and _s.app_name else 'People Manager' }} — Acceso</title>
+    <link rel="stylesheet" href="/static/css/app.css">
+    <style>
+        {% if _s %}
+        :root { --primary: {{ _s.primary_color or '#6366f1' }}; --secondary: {{ _s.secondary_color or '#3563e9' }}; }
+        {% endif %}
+        body { display: flex; align-items: center; justify-content: center; min-height: 100vh; min-height: 100dvh; background: var(--bg, #0f172a); padding: 1rem env(safe-area-inset-right,0) 1rem env(safe-area-inset-left,0); }
+        .login-card { background: var(--card-bg, #1e293b); border-radius: 12px; padding: 2.5rem 2rem; width: 100%; max-width: 380px; box-shadow: 0 8px 32px rgba(0,0,0,.4); }
+        .login-logo { display:flex; justify-content:center; margin-bottom:.9rem; }
+        .login-logo img { height:56px; object-fit:contain; border-radius:10px; }
+        .login-card h1 { margin: 0 0 .25rem; font-size: 1.4rem; color: var(--text, #e2e8f0); text-align:center; }
+        .login-card .subtitle { margin: 0 0 2rem; font-size: .85rem; color: var(--text-muted, #94a3b8); text-align:center; }
+        .login-card .field { display: flex; flex-direction: column; gap: .35rem; margin-bottom: 1.1rem; }
+        .login-card .field label { font-size: .8rem; font-weight: 600; color: var(--text-muted, #94a3b8); text-transform: uppercase; letter-spacing: .05em; }
+        .login-card .field input { padding: .7rem .9rem; border-radius: 6px; border: 1px solid var(--border, #334155); background: var(--input-bg, #0f172a); color: var(--text, #e2e8f0); font-size: 16px; }
+        .login-card .field input:focus { outline: none; border-color: var(--primary, #6366f1); box-shadow: 0 0 0 2px rgba(99,102,241,.25); }
+        .login-card .btn-login { width: 100%; padding: .75rem; border-radius: 6px; border: none; background: var(--primary, #6366f1); color: #fff; font-size: 1rem; font-weight: 600; cursor: pointer; margin-top: .5rem; min-height: 48px; }
+        .login-card .btn-login:hover { filter: brightness(1.1); }
+        .login-error { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.3); border-radius: 6px; padding: .6rem .9rem; margin-bottom: 1.2rem; color: #fca5a5; font-size: .88rem; }
+        .login-success { background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.3); border-radius: 6px; padding: .6rem .9rem; margin-bottom: 1.2rem; color: #86efac; font-size: .88rem; }
+        .forgot-link { display: block; text-align: right; margin-top: .5rem; font-size: .85rem; color: var(--text-muted, #94a3b8); text-decoration: none; min-height: 44px; display: flex; align-items: center; justify-content: flex-end; }
+        .forgot-link:hover { color: var(--primary, #6366f1); }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        {% if _s and _s.logo_path %}
+        <div class="login-logo">
+            <img src="/branding/logo" alt="logo">
+        </div>
+        {% endif %}
+        <h1>{{ _s.app_name if _s and _s.app_name else 'People Manager' }}</h1>
+        <p class="subtitle">
+            {% if _s and _s.welcome_text %}{{ _s.welcome_text }}
+            {% else %}Acceso restringido al panel de administración{% endif %}
+        </p>
+
+        {% if error %}
+        <div class="login-error">{{ error }}</div>
+        {% endif %}
+
+        {% if success %}
+        <div class="login-success">{{ success }}</div>
+        {% endif %}
+
+        <form method="POST" action="/admin/login">
+            <input type="hidden" name="next" value="{{ next }}">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+            <div class="field">
+                <label for="username">Usuario</label>
+                <input type="text" id="username" name="username" autocomplete="username" required autofocus inputmode="text">
+            </div>
+            <div class="field">
+                <label for="password">Contraseña</label>
+                <input type="password" id="password" name="password" autocomplete="current-password" required>
+            </div>
+            <button type="submit" class="btn-login">Entrar</button>
+        </form>
+        <a href="/admin/forgot-password" class="forgot-link">¿Olvidaste tu contraseña?</a>
+    </div>
+</body>
+</html>

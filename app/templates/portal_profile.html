@@ -1,0 +1,54 @@
+{% extends "portal_base.html" %}
+{% block title %}Mi Perfil{% endblock %}
+{% set active_page = 'profile' %}
+{% block content %}
+<div class="page-header" style="margin-bottom:1.5rem;">
+    <div>
+        <h1>Mi Perfil</h1>
+        <p class="page-header-sub">Edita tus datos personales</p>
+    </div>
+</div>
+
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
+
+<div class="portal-card">
+    <div class="portal-card-title">Datos de contacto</div>
+    <form method="POST" action="/portal/profile" style="display:grid;gap:1rem;max-width:min(480px,100%);">
+        <label class="field">
+            Nombre completo
+            <input type="text" name="display_name" value="{{ user.display_name }}" required minlength="2">
+        </label>
+        <label class="field">
+            Email
+            <input type="email" name="email" value="{{ user.email or '' }}" placeholder="tu@email.com">
+        </label>
+        <label class="field">
+            Teléfono
+            <input type="tel" name="phone" value="{{ user.phone or '' }}" placeholder="+34 600 000 000">
+        </label>
+        <div>
+            <button type="submit" class="btn-accent">Guardar cambios</button>
+        </div>
+    </form>
+</div>
+
+{% if person %}
+<div class="portal-card">
+    <div class="portal-card-title">Documento de identidad</div>
+    <form method="POST" action="/portal/identity" style="display:grid;gap:1rem;max-width:min(480px,100%);">
+        <label class="field">
+            DNI
+            <input type="text" name="dni" value="{{ person.dni or '' }}" placeholder="12345678A" maxlength="64">
+        </label>
+        <label class="field">
+            Pasaporte
+            <input type="text" name="passport" value="{{ person.passport or '' }}" placeholder="X1234567" maxlength="64">
+        </label>
+        <div>
+            <button type="submit" class="btn-accent">Actualizar documentos</button>
+        </div>
+    </form>
+</div>
+{% endif %}
+{% endblock %}

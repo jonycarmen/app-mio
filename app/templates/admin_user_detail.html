@@ -1,0 +1,276 @@
+{% extends "base.html" %}
+{% block title %}Usuario: {{ user.display_name }}{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1 style="display:flex;align-items:center;gap:.6rem;">
+            {% if user.admin_color %}
+            <span style="width:14px;height:14px;border-radius:50%;background:{{ user.admin_color }};display:inline-block;flex-shrink:0;"></span>
+            {% endif %}
+            {{ user.display_name }}
+            {% if user.admin_tag %}
+            <span style="font-size:.8rem;padding:.2rem .65rem;border-radius:12px;font-weight:600;
+                         background:{{ user.admin_color or '#334155' }}22;color:{{ user.admin_color or '#94a3b8' }};
+                         border:1px solid {{ user.admin_color or '#334155' }}44;">{{ user.admin_tag }}</span>
+            {% endif %}
+        </h1>
+        <p class="page-header-sub">Usuario #{{ user.id }} &mdash;
+            {% if user.is_active %}<span style="color:var(--success);">Activo</span>
+            {% else %}<span style="color:var(--danger);">Inactivo</span>{% endif %}
+        </p>
+    </div>
+    <div class="page-header-actions">
+        <a href="/admin/users" class="button btn-outline">← Volver</a>
+        <form method="POST" action="/admin/users/{{ user.id }}/toggle" style="display:inline;">
+            {% if user.is_active %}
+            <button type="submit" class="button btn-warning">Desactivar usuario</button>
+            {% else %}
+            <button type="submit" class="button btn-success">Activar usuario</button>
+            {% endif %}
+        </form>
+        <form method="POST" action="/admin/users/{{ user.id }}/delete" style="display:inline;"
+              onsubmit="return confirm('⚠️ ¿Estás seguro de eliminar a {{ user.display_name }}? Se borrarán todos sus datos, documentos y nóminas. Esta acción NO se puede deshacer.');">
+            <button type="submit" class="button btn-danger">Eliminar usuario</button>
+        </form>
+    </div>
+</section>
+
+{% if error %}<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:.65rem 1rem;margin-bottom:1rem;color:var(--danger);font-size:.88rem;">{{ error }}</div>{% endif %}
+{% if success %}<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:.65rem 1rem;margin-bottom:1rem;color:var(--success);font-size:.88rem;">{{ success }}</div>{% endif %}
+
+<div class="grid-detail">
+    <!-- Edit form (includes tag/color) -->
+    <div class="card">
+        <div class="card-title">Editar datos</div>
+        <form method="POST" action="/admin/users/{{ user.id }}" style="display:grid;gap:.9rem;">
+            <label class="field">
+                Nombre completo
+                <input type="text" name="display_name" value="{{ user.display_name }}" required minlength="2">
+            </label>
+            <label class="field">
+                Email
+                <input type="email" name="email" value="{{ user.email or '' }}">
+            </label>
+            <label class="field">
+                Teléfono
+                <input type="text" name="phone" value="{{ user.phone or '' }}">
+            </label>
+
+            <!-- Admin tag -->
+            <label class="field">
+                Etiqueta (admin)
+                <input type="text" name="admin_tag" value="{{ user.admin_tag or '' }}" maxlength="50"
+                       placeholder="Ej: VIP, Pendiente, Activo…"
+                       list="tag-suggestions">
+                <datalist id="tag-suggestions">
+                    <option value="VIP">
+                    <option value="Activo">
+                    <option value="Pendiente">
+                    <option value="Descartado">
+                    <option value="Inactivo">
+                    <option value="Prioritario">
+                </datalist>
+            </label>
+
+            <!-- Admin color -->
+            <div class="field">
+                <span style="font-size:.8rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.35rem;display:block;">Color de etiqueta (admin)</span>
+                <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:.45rem;">
+                    <input type="color" id="admin-color-picker"
+                           value="{{ user.admin_color or '#6b7280' }}"
+                           oninput="document.getElementById('admin-color-hex').value=this.value;document.getElementsByName('admin_color')[0].value=this.value;updateTagPreview()"
+                           style="width:40px;height:36px;padding:2px;cursor:pointer;">
+                    <input type="text" id="admin-color-hex" value="{{ user.admin_color or '' }}"
+                           maxlength="7" pattern="#[0-9a-fA-F]{6}" placeholder="#rrggbb"
+                           style="width:90px;font-family:monospace;"
+                           oninput="if(/^#[0-9a-fA-F]{6}$/.test(this.value)){document.getElementById('admin-color-picker').value=this.value;document.getElementsByName('admin_color')[0].value=this.value;updateTagPreview()}">
+                    <button type="button" onclick="clearColor()" style="font-size:.8rem;padding:.3rem .6rem;border-radius:5px;background:#334155;color:#94a3b8;border:none;cursor:pointer;">Sin color</button>
+                </div>
+                <!-- Hidden input that actually submits -->
+                <input type="hidden" name="admin_color" id="admin-color-value" value="{{ user.admin_color or '' }}">
+                <!-- Preset swatches -->
+                <div style="display:flex;flex-wrap:wrap;gap:.4rem;">
+                    {% for c in preset_colors %}
+                    <span onclick="setAdminColor('{{ c.hex }}')"
+                          title="{{ c.name }}"
+                          style="width:22px;height:22px;border-radius:50%;background:{{ c.hex }};cursor:pointer;
+                                 border:2px solid {% if user.admin_color == c.hex %}white{% else %}transparent{% endif %};
+                                 transition:border-color .15s;box-shadow:0 0 0 1px #334155;">
+                    </span>
+                    {% endfor %}
+                </div>
+                <!-- Live preview -->
+                <div style="margin-top:.6rem;" id="tag-preview-wrap">
+                    {% if user.admin_tag or user.admin_color %}
+                    <span id="tag-preview"
+                          style="display:inline-flex;align-items:center;gap:.35rem;padding:.2rem .65rem;border-radius:12px;font-size:.8rem;font-weight:600;
+                                 background:{{ user.admin_color or '#334155' }}22;
+                                 color:{{ user.admin_color or '#94a3b8' }};
+                                 border:1px solid {{ user.admin_color or '#334155' }}44;">
+                        {% if user.admin_color %}<span style="width:10px;height:10px;border-radius:50%;background:{{ user.admin_color }};display:inline-block;"></span>{% endif %}
+                        {{ user.admin_tag or 'Etiqueta' }}
+                    </span>
+                    {% else %}
+                    <span id="tag-preview" style="display:none;"></span>
+                    {% endif %}
+                </div>
+            </div>
+
+            <div>
+                <button type="submit" class="button btn-success">Guardar cambios</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Summary -->
+    <div class="card">
+        <div class="card-title">Resumen</div>
+        <ul class="item-list">
+            <li>
+                <span class="item-list-sub">Color del tema (usuario)</span>
+                <span style="display:flex;align-items:center;gap:.4rem;">
+                    <span style="width:16px;height:16px;border-radius:50%;background:{{ user.theme_color or '#3563e9' }};display:inline-block;"></span>
+                    <code>{{ user.theme_color or '#3563e9' }}</code>
+                </span>
+            </li>
+            <li>
+                <span class="item-list-sub">Etiqueta admin</span>
+                <span>
+                    {% if user.admin_tag %}
+                    <span style="display:inline-flex;align-items:center;gap:.3rem;padding:.15rem .55rem;border-radius:12px;font-size:.8rem;font-weight:600;
+                                 background:{{ user.admin_color or '#334155' }}22;color:{{ user.admin_color or '#94a3b8' }};
+                                 border:1px solid {{ user.admin_color or '#334155' }}44;">
+                        {{ user.admin_tag }}
+                    </span>
+                    {% else %}—{% endif %}
+                </span>
+            </li>
+            <li><span class="item-list-sub">Documentos</span><span>{{ documents|length }}</span></li>
+            <li><span class="item-list-sub">Cuentas bancarias</span><span>{{ banks|length }}</span></li>
+            <li><span class="item-list-sub">Wallets</span><span>{{ wallets|length }}</span></li>
+            <li><span class="item-list-sub">Nóminas</span><span>{{ payrolls|length }}</span></li>
+            <li><span class="item-list-sub">Registrado</span><span>{{ user.created_at.strftime('%d/%m/%Y %H:%M') if user.created_at else '—' }}</span></li>
+        </ul>
+    </div>
+</div>
+
+{% if person %}
+<!-- Documents -->
+<div class="card">
+    <div class="card-title">Documentos ({{ documents|length }})</div>
+    {% if documents %}
+    <div class="table-wrap" style="box-shadow:none;border:none;">
+        <table class="table">
+            <thead><tr><th>Archivo</th><th>Categoría</th><th>Tamaño</th><th>Subido</th></tr></thead>
+            <tbody>
+                {% for d in documents %}
+                <tr>
+                    <td>{{ d.original_filename }}</td>
+                    <td>{{ d.category or '—' }}</td>
+                    <td>{{ (d.file_size / 1024)|round(1) }} KB</td>
+                    <td style="color:var(--text-muted);font-size:.82rem;">{{ d.uploaded_at.strftime('%d/%m/%Y') if d.uploaded_at else '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <p class="empty-state">Sin documentos.</p>
+    {% endif %}
+</div>
+
+<!-- Bank accounts -->
+<div class="card">
+    <div class="card-title">Cuentas bancarias ({{ banks|length }})</div>
+    {% if banks %}
+    <div class="table-wrap" style="box-shadow:none;border:none;">
+        <table class="table">
+            <thead><tr><th>Banco</th><th>IBAN</th><th>N.º cuenta</th></tr></thead>
+            <tbody>
+                {% for b in banks %}
+                <tr>
+                    <td>{{ b.bank_name or '—' }}</td>
+                    <td style="font-family:monospace;font-size:.83rem;">{{ b.iban or '—' }}</td>
+                    <td>{{ b.account_number or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<p class="empty-state">Sin cuentas bancarias.</p>{% endif %}
+</div>
+
+<!-- Wallets -->
+<div class="card">
+    <div class="card-title">Wallets ({{ wallets|length }})</div>
+    {% if wallets %}
+    <div class="table-wrap" style="box-shadow:none;border:none;">
+        <table class="table">
+            <thead><tr><th>Red</th><th>Dirección</th><th>Etiqueta</th></tr></thead>
+            <tbody>
+                {% for w in wallets %}
+                <tr>
+                    <td>{{ w.network or '—' }}</td>
+                    <td style="font-family:monospace;font-size:.8rem;word-break:break-all;">{{ w.address }}</td>
+                    <td>{{ w.label or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<p class="empty-state">Sin wallets.</p>{% endif %}
+</div>
+
+<!-- Payrolls -->
+<div class="card">
+    <div class="card-title">Nóminas ({{ payrolls|length }})</div>
+    {% if payrolls %}
+    <div class="table-wrap" style="box-shadow:none;border:none;">
+        <table class="table">
+            <thead><tr><th>Importe</th><th>Fecha efectiva</th><th>Notas</th></tr></thead>
+            <tbody>
+                {% for p in payrolls %}
+                <tr>
+                    <td style="font-weight:600;">{{ p.amount }} €</td>
+                    <td>{{ p.effective_date }}</td>
+                    <td style="color:var(--text-muted);">{{ p.notes or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}<p class="empty-state">Sin nóminas.</p>{% endif %}
+</div>
+{% endif %}
+
+<script>
+function setAdminColor(hex) {
+    document.getElementById('admin-color-picker').value = hex;
+    document.getElementById('admin-color-hex').value = hex;
+    document.getElementById('admin-color-value').value = hex;
+    updateTagPreview();
+}
+
+function clearColor() {
+    document.getElementById('admin-color-picker').value = '#6b7280';
+    document.getElementById('admin-color-hex').value = '';
+    document.getElementById('admin-color-value').value = '';
+    updateTagPreview();
+}
+
+function updateTagPreview() {
+    const tag = document.querySelector('[name="admin_tag"]').value.trim();
+    const color = document.getElementById('admin-color-value').value.trim();
+    const preview = document.getElementById('tag-preview');
+    if (!tag && !color) { preview.style.display = 'none'; return; }
+    const c = color || '#334155';
+    preview.style.display = 'inline-flex';
+    preview.style.background = c + '22';
+    preview.style.color = color || '#94a3b8';
+    preview.style.border = '1px solid ' + c + '44';
+    preview.innerHTML = (color ? `<span style="width:10px;height:10px;border-radius:50%;background:${color};display:inline-block;"></span>` : '') + (tag || 'Etiqueta');
+}
+
+document.querySelector('[name="admin_tag"]').addEventListener('input', updateTagPreview);
+</script>
+{% endblock %}

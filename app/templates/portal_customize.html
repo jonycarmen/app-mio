@@ -1,0 +1,62 @@
+{% extends "portal_base.html" %}
+{% block title %}Personalización{% endblock %}
+{% set active_page = 'customize' %}
+{% block content %}
+<div class="page-header" style="margin-bottom:1.5rem;">
+    <div>
+        <h1>Personalización</h1>
+        <p class="page-header-sub">Color del tema y foto de perfil</p>
+    </div>
+</div>
+
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
+
+<div class="grid-detail" style="gap:1.25rem;">
+
+    <!-- Color picker -->
+    <div class="portal-card">
+        <div class="portal-card-title">Color del tema</div>
+        <form method="POST" action="/portal/customize" style="display:grid;gap:1rem;">
+            <label class="field">
+                Elige tu color principal
+                <input type="color" name="theme_color" value="{{ user.theme_color or '#3563e9' }}"
+                       style="height:48px;padding:.25rem .4rem;cursor:pointer;">
+            </label>
+            <p style="font-size:.8rem;color:#64748b;">Este color se aplica a la barra lateral, botones y acentos de tu portal.</p>
+            <div>
+                <button type="submit" class="btn-accent">Guardar color</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Photo upload -->
+    <div class="portal-card">
+        <div class="portal-card-title">Foto de perfil</div>
+        <div style="display:flex;flex-direction:column;align-items:center;gap:1rem;margin-bottom:1.25rem;">
+            <div class="avatar" style="width:80px;height:80px;font-size:2rem;">
+                {% if user.profile_photo_path %}
+                <img src="/portal/photo" alt="foto de perfil">
+                {% else %}
+                {{ user.display_name[0]|upper }}
+                {% endif %}
+            </div>
+            {% if user.profile_photo_path %}
+            <span style="font-size:.78rem;color:#64748b;">Foto actual</span>
+            {% else %}
+            <span style="font-size:.78rem;color:#64748b;">Sin foto de perfil</span>
+            {% endif %}
+        </div>
+
+        <form method="POST" action="/portal/customize/photo" enctype="multipart/form-data" style="display:grid;gap:.9rem;">
+            <label class="field">
+                Subir nueva foto (JPG/PNG, máx. 5 MB)
+                <input type="file" name="photo" accept="image/jpeg,image/png" required>
+            </label>
+            <div>
+                <button type="submit" class="btn-accent">Subir foto</button>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}

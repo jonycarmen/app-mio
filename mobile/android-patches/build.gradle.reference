@@ -1,0 +1,53 @@
+// build.gradle (app module) — annotated reference for Capacitor Android project
+// ============================================================================
+// After `npx cap add android`, open android/app/build.gradle and verify these
+// values match (Capacitor usually sets them; adjust if your project needs it).
+
+android {
+    namespace "com.miapp.portal"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.miapp.portal"
+        minSdk 22                   // Android 5.1+
+        targetSdk 34
+        versionCode 1
+        versionName "1.0.0"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false     // set true + add proguard rules if needed
+            // signingConfig signingConfigs.release  // uncomment when signing is configured
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+// ── How to generate a signed APK ───────────────────────────────────────────
+// 1. Create a keystore (one-time):
+//      keytool -genkey -v -keystore mi-app-release.jks \
+//              -alias mi-app -keyalg RSA -keysize 2048 -validity 10000
+//
+// 2. Add to android/app/build.gradle:
+//      signingConfigs {
+//          release {
+//              storeFile file('path/to/mi-app-release.jks')
+//              storePassword 'YOUR_STORE_PASSWORD'
+//              keyAlias 'mi-app'
+//              keyPassword 'YOUR_KEY_PASSWORD'
+//          }
+//      }
+//      buildTypes { release { signingConfig signingConfigs.release } }
+//
+// 3. Build:
+//      cd android
+//      ./gradlew assembleRelease          # produces app-release.apk
+//      ./gradlew bundleRelease            # produces .aab for Play Store
+//
+// 4. APK is at:
+//      android/app/build/outputs/apk/release/app-release.apk

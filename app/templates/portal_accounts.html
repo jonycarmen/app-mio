@@ -1,0 +1,93 @@
+{% extends "portal_base.html" %}
+{% block title %}Mis Cuentas{% endblock %}
+{% set active_page = 'accounts' %}
+{% block content %}
+<div class="page-header" style="margin-bottom:1.5rem;">
+    <div>
+        <h1>Mis Cuentas</h1>
+        <p class="page-header-sub">Cuentas bancarias y wallets de criptomonedas</p>
+    </div>
+</div>
+
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
+
+<!-- Add account form -->
+<div class="portal-card">
+    <div class="portal-card-title">Añadir cuenta bancaria o wallet</div>
+    <form method="POST" action="/portal/accounts" style="display:grid;gap:1.25rem;">
+
+        <div>
+            <h2 style="color:#94a3b8;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem;">Cuenta bancaria</h2>
+            <div class="grid" style="gap:.75rem;">
+                <label class="field">Banco <input type="text" name="bank_name" placeholder="Santander, BBVA…"></label>
+                <label class="field">IBAN <input type="text" name="iban" placeholder="ES00 0000 0000 00…"></label>
+                <label class="field">N.º cuenta <input type="text" name="account_number" placeholder="Opcional"></label>
+                <label class="field">Notas <input type="text" name="bank_notes" placeholder="Opcional"></label>
+            </div>
+        </div>
+
+        <div>
+            <h2 style="color:#94a3b8;font-size:.85rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:.75rem;">Wallet cripto</h2>
+            <div class="grid" style="gap:.75rem;">
+                <label class="field">Red/Protocolo <input type="text" name="wallet_network" placeholder="BTC, ETH, SOL…"></label>
+                <label class="field">Dirección <input type="text" name="wallet_address" placeholder="0x…"></label>
+                <label class="field">Etiqueta <input type="text" name="wallet_label" placeholder="Opcional"></label>
+                <label class="field">Notas <input type="text" name="wallet_notes" placeholder="Opcional"></label>
+            </div>
+        </div>
+
+        <div>
+            <button type="submit" class="btn-accent">Añadir</button>
+        </div>
+    </form>
+</div>
+
+<!-- Bank accounts table -->
+{% if banks %}
+<div class="portal-card">
+    <div class="portal-card-title">Cuentas bancarias</div>
+    <div class="table-wrap" style="margin:0;">
+        <table class="table">
+            <thead><tr><th>Banco</th><th>IBAN</th><th>N.º cuenta</th><th>Notas</th></tr></thead>
+            <tbody>
+                {% for b in banks %}
+                <tr>
+                    <td>{{ b.bank_name or '—' }}</td>
+                    <td style="font-family:monospace;font-size:.83rem;word-break:break-all;">{{ b.iban or '—' }}</td>
+                    <td>{{ b.account_number or '—' }}</td>
+                    <td style="color:#64748b;">{{ b.notes or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- Wallets table -->
+{% if wallets %}
+<div class="portal-card">
+    <div class="portal-card-title">Wallets</div>
+    <div class="table-wrap" style="margin:0;">
+        <table class="table">
+            <thead><tr><th>Red</th><th>Dirección</th><th>Etiqueta</th><th>Notas</th></tr></thead>
+            <tbody>
+                {% for w in wallets %}
+                <tr>
+                    <td>{{ w.network or '—' }}</td>
+                    <td style="font-family:monospace;font-size:.8rem;word-break:break-all;">{{ w.address }}</td>
+                    <td>{{ w.label or '—' }}</td>
+                    <td style="color:#64748b;">{{ w.notes or '—' }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+{% if not banks and not wallets %}
+<p style="color:#64748b;font-size:.9rem;padding:.5rem 0;">No tienes cuentas ni wallets registradas todavía.</p>
+{% endif %}
+{% endblock %}

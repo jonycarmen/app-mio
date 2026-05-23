@@ -1,0 +1,60 @@
+{% extends "portal_base.html" %}
+{% block title %}Mi Nómina{% endblock %}
+{% set active_page = 'payroll' %}
+{% block content %}
+<div class="page-header" style="margin-bottom:1.5rem;">
+    <div>
+        <h1>Mi Nómina</h1>
+        <p class="page-header-sub">Historial de nóminas</p>
+    </div>
+</div>
+
+{% if payrolls %}
+<div class="portal-card" style="margin-bottom:1.25rem;">
+    <div class="portal-card-title">Última nómina</div>
+    <div class="stat-grid" style="margin-bottom:0;">
+        <div class="stat-card">
+            <div class="stat-label">Importe</div>
+            <div class="stat-value">{{ payrolls[0].amount }} €</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-label">Fecha</div>
+            <div class="stat-value" style="font-size:1.2rem;">{{ payrolls[0].effective_date }}</div>
+        </div>
+        {% if payrolls[0].notes %}
+        <div class="stat-card">
+            <div class="stat-label">Notas</div>
+            <div class="stat-value" style="font-size:.95rem;font-weight:500;color:#94a3b8;">{{ payrolls[0].notes }}</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+
+<div class="table-wrap">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>#</th>
+                <th>Importe</th>
+                <th>Fecha efectiva</th>
+                <th>Notas</th>
+                <th>Registrado</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in payrolls %}
+            <tr>
+                <td style="color:#64748b;">{{ loop.index }}</td>
+                <td style="font-weight:600;color:#86efac;">{{ p.amount }} €</td>
+                <td>{{ p.effective_date }}</td>
+                <td style="color:#94a3b8;">{{ p.notes or '—' }}</td>
+                <td style="color:#64748b;font-size:.82rem;">{{ p.created_at.strftime('%d/%m/%Y') if p.created_at else '—' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="empty-state" style="color:#64748b;">No hay registros de nómina todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}
