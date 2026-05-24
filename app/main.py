@@ -70,6 +70,7 @@ app.add_middleware(SecurityHeadersMiddleware)
 
 # ── Static files ─────────────────────────────────────────────────────────────
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
+app.mount("/movil", StaticFiles(directory="APP_MIO_STATIC", html=True), name="movil")
 
 # ── Jinja2 templates for login ────────────────────────────────────────────────
 _templates = Jinja2Templates(directory="app/templates")

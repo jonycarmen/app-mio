@@ -1,0 +1,1018 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APP MIO</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<style>
+:root { --primary: #6366f1; --primary-dark: #4f46e5; }
+body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; }
+
+/* LOGIN */
+#loginScreen {
+  min-height: 100vh; display: flex; align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1e1b4b 0%, #3730a3 50%, #4f46e5 100%);
+}
+.login-card {
+  background: #fff; border-radius: 16px; padding: 2.5rem;
+  width: 100%; max-width: 400px; box-shadow: 0 25px 50px rgba(0,0,0,.3);
+}
+.login-logo { font-size: 2rem; font-weight: 800; color: var(--primary); text-align: center; margin-bottom: .25rem; }
+.login-subtitle { text-align: center; color: #64748b; margin-bottom: 2rem; }
+
+/* LAYOUT */
+.app-wrapper { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 220px; background: linear-gradient(180deg,#1e1b4b 0%,#312e81 100%);
+  min-height: 100vh; position: fixed; top: 0; left: 0; z-index: 100;
+  display: flex; flex-direction: column; padding-bottom: 1rem;
+}
+.sidebar-brand {
+  padding: 1.5rem 1.25rem 1rem; font-size: 1.25rem; font-weight: 800;
+  color: #fff; border-bottom: 1px solid rgba(255,255,255,.1); margin-bottom: .5rem;
+}
+.sidebar-nav { flex: 1; padding: 0 .75rem; }
+.sidebar-nav .nav-item { margin-bottom: 2px; }
+.sidebar-nav .nav-link {
+  color: rgba(255,255,255,.65); border-radius: 8px; padding: .6rem .9rem;
+  font-size: .92rem; display: flex; align-items: center; gap: .6rem; transition: all .15s;
+}
+.sidebar-nav .nav-link:hover { color: #fff; background: rgba(255,255,255,.1); }
+.sidebar-nav .nav-link.active { color: #fff; background: var(--primary); }
+.sidebar-nav .nav-link i { font-size: 1rem; }
+.sidebar-footer { padding: 0 .75rem; }
+.main-content { margin-left: 220px; padding: 2rem; width: calc(100% - 220px); }
+
+/* CARDS */
+.stat-card {
+  background: #fff; border-radius: 12px; padding: 1.25rem 1.5rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08); border: 1px solid #e2e8f0;
+}
+.form-card {
+  background: #fff; border-radius: 12px; padding: 2rem;
+  box-shadow: 0 1px 3px rgba(0,0,0,.08); border: 1px solid #e2e8f0;
+}
+.section-title {
+  font-size: .85rem; font-weight: 700; color: var(--primary); text-transform: uppercase;
+  letter-spacing: .08em; margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 2px solid #e0e7ff;
+}
+
+/* TABLE */
+.people-table { background: #fff; border-radius: 12px; overflow: hidden; box-shadow: 0 1px 3px rgba(0,0,0,.08); border: 1px solid #e2e8f0; }
+.people-table table { margin: 0; }
+.people-table .table th { background: #f8fafc; border-bottom: 2px solid #e2e8f0; font-weight: 600; font-size: .85rem; color: #475569; text-transform: uppercase; letter-spacing: .05em; }
+.people-table .table td { vertical-align: middle; border-color: #f1f5f9; }
+.people-table .table tbody tr:hover { background: #f8fafc; }
+.badge-payroll { background: #dcfce7; color: #166534; font-weight: 600; padding: .3em .6em; border-radius: 6px; font-size: .8rem; }
+.badge-doc { background: #dbeafe; color: #1e40af; font-weight: 600; padding: .3em .6em; border-radius: 6px; font-size: .8rem; }
+
+/* TABS */
+.detail-tabs .nav-tabs { border-bottom: 2px solid #e2e8f0; }
+.detail-tabs .nav-link { color: #64748b; border: none; padding: .75rem 1.25rem; border-bottom: 2px solid transparent; margin-bottom: -2px; cursor: pointer; }
+.detail-tabs .nav-link.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+.detail-tabs .nav-link:hover { color: var(--primary); }
+
+/* ITEMS */
+.doc-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: .75rem 1rem; margin-bottom: .5rem; display: flex; align-items: center; gap: .75rem; }
+.doc-icon { font-size: 1.5rem; }
+.doc-icon.pdf { color: #dc2626; }
+.doc-icon.img { color: #7c3aed; }
+.doc-info { flex: 1; min-width: 0; }
+.doc-name { font-weight: 500; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.doc-meta { font-size: .78rem; color: #64748b; }
+.payroll-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: .75rem 1rem; margin-bottom: .5rem; display: flex; align-items: center; justify-content: space-between; }
+.payroll-amount { font-size: 1.1rem; font-weight: 700; color: #059669; }
+.payroll-date { font-size: .85rem; color: #64748b; }
+.payroll-notes { font-size: .8rem; color: #94a3b8; }
+
+/* MISC */
+.btn-primary { background: var(--primary); border-color: var(--primary); }
+.btn-primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+.btn-outline-primary { color: var(--primary); border-color: var(--primary); }
+.btn-outline-primary:hover { background: var(--primary); border-color: var(--primary); color: #fff; }
+.search-box { position: relative; }
+.search-box i { position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: #94a3b8; z-index: 1; }
+.search-box input { padding-left: 2.2rem; }
+.empty-state { text-align: center; padding: 3rem 1rem; color: #94a3b8; }
+.empty-state i { font-size: 3rem; display: block; margin-bottom: 1rem; }
+.toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; }
+.form-label { font-weight: 500; font-size: .9rem; color: #374151; }
+
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); transition: transform .3s; }
+  .sidebar.open { transform: translateX(0); }
+  .main-content { margin-left: 0; width: 100%; padding: 1rem; }
+}
+</style>
+</head>
+<body>
+
+<!-- ==================== LOGIN ==================== -->
+<div id="loginScreen">
+  <div class="login-card">
+    <div class="login-logo"><i class="bi bi-people-fill"></i> APP MIO</div>
+    <p class="login-subtitle">Panel de Administración</p>
+    <form id="loginForm">
+      <div class="mb-3">
+        <label class="form-label">Usuario</label>
+        <input type="text" id="loginUser" class="form-control" placeholder="usuario@email.com" autocomplete="username" required>
+      </div>
+      <div class="mb-4">
+        <label class="form-label">Contraseña</label>
+        <div class="input-group">
+          <input type="password" id="loginPass" class="form-control" placeholder="••••••••" autocomplete="current-password" required>
+          <button type="button" class="btn btn-outline-secondary" onclick="togglePass()">
+            <i class="bi bi-eye" id="eyeIcon"></i>
+          </button>
+        </div>
+      </div>
+      <div id="loginError" class="alert alert-danger d-none py-2 small">Credenciales incorrectas</div>
+      <button type="submit" class="btn btn-primary w-100">
+        <i class="bi bi-box-arrow-in-right me-1"></i>Iniciar sesión
+      </button>
+    </form>
+  </div>
+</div>
+
+<!-- ==================== APP ==================== -->
+<div id="appContainer" style="display:none">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand"><i class="bi bi-people-fill me-2"></i>APP MIO</div>
+    <div class="sidebar-nav">
+      <ul class="nav flex-column">
+        <li class="nav-item">
+          <a href="#" class="nav-link active" id="navPeople" onclick="navigate('people');return false;">
+            <i class="bi bi-people"></i>Personas
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" id="navSettings" onclick="navigate('settings');return false;">
+            <i class="bi bi-gear"></i>Configuración
+          </a>
+        </li>
+      </ul>
+    </div>
+    <div class="sidebar-footer">
+      <a href="#" class="nav-link" style="color:rgba(255,100,100,.8)" onclick="logout();return false;">
+        <i class="bi bi-box-arrow-right"></i>Cerrar sesión
+      </a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+
+    <!-- PEOPLE LIST -->
+    <div id="viewPeopleList">
+      <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+        <div>
+          <h4 class="fw-bold mb-0">Personas</h4>
+          <p class="text-muted mb-0 small" id="peopleCountText">0 registros</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-outline-success btn-sm" onclick="exportExcel()">
+            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+          </button>
+          <button class="btn btn-outline-danger btn-sm" onclick="exportPDF()">
+            <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+          </button>
+          <button class="btn btn-primary" onclick="navigate('personNew')">
+            <i class="bi bi-plus-lg me-1"></i>Nueva persona
+          </button>
+        </div>
+      </div>
+      <div class="people-table">
+        <div class="p-3 border-bottom">
+          <div class="search-box" style="max-width:420px">
+            <i class="bi bi-search"></i>
+            <input type="text" id="searchInput" class="form-control" placeholder="Buscar por nombre, DNI, pasaporte, IBAN, wallet...">
+          </div>
+        </div>
+        <div id="peopleTableContainer"></div>
+      </div>
+    </div>
+
+    <!-- PERSON FORM -->
+    <div id="viewPersonForm" style="display:none">
+      <div class="d-flex align-items-center gap-2 mb-4">
+        <button class="btn btn-outline-secondary btn-sm" onclick="navigate('people')">
+          <i class="bi bi-arrow-left"></i>
+        </button>
+        <h4 class="fw-bold mb-0" id="formTitle">Nueva Persona</h4>
+      </div>
+      <form id="personForm">
+        <input type="hidden" id="personId">
+        <div class="form-card mb-4">
+          <p class="section-title"><i class="bi bi-person me-2"></i>Información Personal</p>
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Nombre completo *</label>
+              <input type="text" id="fName" class="form-control" required placeholder="Ej: Juan García López">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">DNI / Cédula</label>
+              <input type="text" id="fDni" class="form-control" placeholder="Ej: 12345678A">
+            </div>
+            <div class="col-md-3">
+              <label class="form-label">Pasaporte</label>
+              <input type="text" id="fPassport" class="form-control" placeholder="Ej: AB123456">
+            </div>
+          </div>
+        </div>
+        <div class="form-card mb-4">
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <p class="section-title mb-0"><i class="bi bi-bank me-2"></i>Cuentas Bancarias</p>
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addBankRow()">
+              <i class="bi bi-plus me-1"></i>Añadir
+            </button>
+          </div>
+          <div id="bankAccounts">
+            <p class="text-muted small mb-0">Sin cuentas bancarias. Haz clic en "Añadir" para agregar una.</p>
+          </div>
+        </div>
+        <div class="form-card mb-4">
+          <div class="d-flex align-items-center justify-content-between mb-3">
+            <p class="section-title mb-0"><i class="bi bi-currency-bitcoin me-2"></i>Direcciones Wallet</p>
+            <button type="button" class="btn btn-outline-primary btn-sm" onclick="addWalletRow()">
+              <i class="bi bi-plus me-1"></i>Añadir
+            </button>
+          </div>
+          <div id="walletAddresses">
+            <p class="text-muted small mb-0">Sin wallets. Haz clic en "Añadir" para agregar una.</p>
+          </div>
+        </div>
+        <div class="d-flex gap-2 justify-content-end">
+          <button type="button" class="btn btn-outline-secondary" onclick="navigate('people')">Cancelar</button>
+          <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Guardar</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- PERSON DETAIL -->
+    <div id="viewPersonDetail" style="display:none">
+      <div class="d-flex align-items-center gap-2 mb-4 flex-wrap">
+        <button class="btn btn-outline-secondary btn-sm" onclick="navigate('people')">
+          <i class="bi bi-arrow-left"></i>
+        </button>
+        <h4 class="fw-bold mb-0" id="detailName">Persona</h4>
+        <div class="ms-auto d-flex gap-2">
+          <button class="btn btn-outline-primary btn-sm" onclick="navigate('personEdit',currentPersonId)">
+            <i class="bi bi-pencil me-1"></i>Editar
+          </button>
+          <button class="btn btn-outline-danger btn-sm" onclick="confirmDeletePerson(currentPersonId)">
+            <i class="bi bi-trash me-1"></i>Eliminar
+          </button>
+        </div>
+      </div>
+      <div class="row g-3 mb-4" id="detailInfoCards"></div>
+      <div class="form-card detail-tabs">
+        <ul class="nav nav-tabs mb-3">
+          <li class="nav-item"><a class="nav-link active" data-tab="docs" onclick="switchTab('docs')">
+            <i class="bi bi-file-earmark me-1"></i>Documentos <span class="badge bg-secondary ms-1" id="docCount">0</span>
+          </a></li>
+          <li class="nav-item"><a class="nav-link" data-tab="payrolls" onclick="switchTab('payrolls')">
+            <i class="bi bi-cash-coin me-1"></i>Nóminas <span class="badge bg-secondary ms-1" id="payrollCount">0</span>
+          </a></li>
+          <li class="nav-item"><a class="nav-link" data-tab="banks" onclick="switchTab('banks')">
+            <i class="bi bi-bank me-1"></i>Cuentas
+          </a></li>
+          <li class="nav-item"><a class="nav-link" data-tab="wallets" onclick="switchTab('wallets')">
+            <i class="bi bi-currency-bitcoin me-1"></i>Wallets
+          </a></li>
+        </ul>
+        <div id="tabDocs">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="text-muted small">Archivos adjuntos</span>
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">
+              <i class="bi bi-upload me-1"></i>Subir documento
+            </button>
+          </div>
+          <div id="docsList"></div>
+        </div>
+        <div id="tabPayrolls" style="display:none">
+          <div class="d-flex justify-content-between align-items-center mb-3">
+            <span class="text-muted small">Historial de nóminas</span>
+            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#payrollModal">
+              <i class="bi bi-plus me-1"></i>Registrar nómina
+            </button>
+          </div>
+          <div id="payrollsList"></div>
+        </div>
+        <div id="tabBanks" style="display:none"><div id="banksList"></div></div>
+        <div id="tabWallets" style="display:none"><div id="walletsList"></div></div>
+      </div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div id="viewSettings" style="display:none">
+      <h4 class="fw-bold mb-4">Configuración</h4>
+      <div class="form-card mb-4">
+        <p class="section-title"><i class="bi bi-lock me-2"></i>Credenciales de acceso</p>
+        <form id="settingsForm">
+          <div class="row g-3">
+            <div class="col-md-4">
+              <label class="form-label">Usuario</label>
+              <input type="text" id="sUser" class="form-control">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Nueva contraseña</label>
+              <input type="password" id="sPass" class="form-control" placeholder="Dejar vacío para no cambiar">
+            </div>
+            <div class="col-md-4">
+              <label class="form-label">Confirmar contraseña</label>
+              <input type="password" id="sPass2" class="form-control">
+            </div>
+          </div>
+          <div class="mt-3">
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i>Guardar cambios
+            </button>
+          </div>
+        </form>
+      </div>
+      <div class="form-card">
+        <p class="section-title"><i class="bi bi-database me-2"></i>Datos</p>
+        <p class="text-muted small mb-3">Exporta tus datos para hacer backup o para usar con los scripts Python de exportación.</p>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-outline-secondary" onclick="exportData()">
+            <i class="bi bi-download me-1"></i>Exportar datos (JSON)
+          </button>
+          <button class="btn btn-outline-warning" onclick="document.getElementById('importFile').click()">
+            <i class="bi bi-upload me-1"></i>Importar datos (JSON)
+          </button>
+          <input type="file" id="importFile" accept=".json" style="display:none" onchange="importData(event)">
+          <button class="btn btn-outline-danger" onclick="confirmClearData()">
+            <i class="bi bi-trash me-1"></i>Borrar todos los datos
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ==================== MODALS ==================== -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Subir Documento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Archivo *</label>
+          <input type="file" id="uploadFile" class="form-control" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp" required>
+          <div class="form-text">Máximo 10 MB · Formatos: PDF, JPG, PNG, GIF, WebP</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Categoría</label>
+          <input type="text" id="uploadCategory" class="form-control" placeholder="Ej: Contrato, Factura, Identidad...">
+        </div>
+        <div class="mb-0">
+          <label class="form-label">Descripción</label>
+          <input type="text" id="uploadDescription" class="form-control" placeholder="Descripción del documento">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="handleUpload()">
+          <i class="bi bi-upload me-1"></i>Subir
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="payrollModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-cash-coin me-2"></i>Registrar Nómina</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Monto *</label>
+          <div class="input-group">
+            <span class="input-group-text">$</span>
+            <input type="number" id="payrollAmount" class="form-control" min="0.01" step="0.01" required placeholder="0.00">
+          </div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Fecha de vigencia *</label>
+          <input type="date" id="payrollDate" class="form-control" required>
+        </div>
+        <div class="mb-0">
+          <label class="form-label">Notas</label>
+          <input type="text" id="payrollNotes" class="form-control" placeholder="Observaciones...">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="handleAddPayroll()">
+          <i class="bi bi-check-lg me-1"></i>Registrar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="confirmModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Confirmar</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body"><p id="confirmMessage" class="mb-0">¿Estás seguro?</p></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="confirmBtn">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container">
+  <div id="toastEl" class="toast align-items-center text-white border-0" role="alert" aria-live="assertive">
+    <div class="d-flex">
+      <div class="toast-body" id="toastMsg">Listo</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
+<script>
+'use strict';
+
+// ── CONFIG ────────────────────────────────────────────────
+const DB_NAME = 'appMioDB', DB_VER = 1, STORE = 'documents', MAX_MB = 10;
+
+let idb = null;
+let currentPersonId = null;
+let currentTab = 'docs';
+let confirmCb = null;
+
+const DEFAULT_CFG = { adminUser: 'cadeyaj@gmail.com', adminPassword: 'Kira123' };
+
+// ── UTILS ─────────────────────────────────────────────────
+function uid() {
+  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtDate(d) {
+  if (!d) return '—';
+  return new Date(d).toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+function fmtMoney(n) {
+  return new Intl.NumberFormat('es-ES',{minimumFractionDigits:2,maximumFractionDigits:2}).format(n);
+}
+function fmtSize(b) {
+  if (b < 1024) return b+' B';
+  if (b < 1048576) return (b/1024).toFixed(1)+' KB';
+  return (b/1048576).toFixed(1)+' MB';
+}
+function toast(msg, type='success') {
+  const el = document.getElementById('toastEl');
+  el.className = `toast align-items-center text-white border-0 bg-${type==='error'?'danger':'success'}`;
+  document.getElementById('toastMsg').textContent = msg;
+  new bootstrap.Toast(el,{delay:3000}).show();
+}
+function showConfirm(msg, cb) {
+  document.getElementById('confirmMessage').textContent = msg;
+  confirmCb = cb;
+  new bootstrap.Modal(document.getElementById('confirmModal')).show();
+}
+
+// ── STORAGE ───────────────────────────────────────────────
+const getPeople   = () => JSON.parse(localStorage.getItem('amio_people')  || '[]');
+const savePeople  = a  => localStorage.setItem('amio_people', JSON.stringify(a));
+const getPayrolls = () => JSON.parse(localStorage.getItem('amio_payrolls')|| '[]');
+const savePayrolls= a  => localStorage.setItem('amio_payrolls', JSON.stringify(a));
+const getCfg      = () => ({...DEFAULT_CFG,...JSON.parse(localStorage.getItem('amio_cfg')||'{}')});
+const saveCfg     = c  => localStorage.setItem('amio_cfg', JSON.stringify(c));
+const isLoggedIn  = () => sessionStorage.getItem('amio_sess') === '1';
+
+// ── INDEXEDDB ─────────────────────────────────────────────
+function initDB() {
+  return new Promise((ok, fail) => {
+    const r = indexedDB.open(DB_NAME, DB_VER);
+    r.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(STORE)) {
+        const s = d.createObjectStore(STORE, {keyPath:'id'});
+        s.createIndex('personId','personId',{unique:false});
+      }
+    };
+    r.onsuccess = e => { idb = e.target.result; ok(); };
+    r.onerror   = e => fail(e);
+  });
+}
+function dbOp(mode, fn) {
+  return new Promise((ok,fail) => {
+    const tx = idb.transaction(STORE, mode);
+    fn(tx.objectStore(STORE), ok, fail);
+    tx.onerror = fail;
+  });
+}
+const dbAdd  = doc  => dbOp('readwrite',(s,ok)=>{ s.add(doc).onsuccess=ok; });
+const dbDel  = id   => dbOp('readwrite',(s,ok)=>{ s.delete(id).onsuccess=ok; });
+const dbGet  = id   => dbOp('readonly', (s,ok)=>{ s.get(id).onsuccess=e=>ok(e.target.result); });
+const dbByPerson = pid => new Promise((ok,fail)=>{
+  const tx = idb.transaction(STORE,'readonly');
+  tx.objectStore(STORE).index('personId').getAll(pid).onsuccess = e => ok(e.target.result);
+  tx.onerror = fail;
+});
+const dbDelByPerson = async pid => {
+  const docs = await dbByPerson(pid);
+  const tx = idb.transaction(STORE,'readwrite');
+  const s  = tx.objectStore(STORE);
+  docs.forEach(d => s.delete(d.id));
+  return new Promise((ok,fail) => { tx.oncomplete=ok; tx.onerror=fail; });
+};
+
+// ── AUTH ──────────────────────────────────────────────────
+function login(user, pass) {
+  const c = getCfg();
+  if (user === c.adminUser && pass === c.adminPassword) {
+    sessionStorage.setItem('amio_sess','1');
+    return true;
+  }
+  return false;
+}
+function logout() {
+  sessionStorage.removeItem('amio_sess');
+  document.getElementById('appContainer').style.display = 'none';
+  document.getElementById('loginScreen').style.display  = 'flex';
+}
+function togglePass() {
+  const i = document.getElementById('loginPass');
+  const e = document.getElementById('eyeIcon');
+  if (i.type==='password') { i.type='text'; e.className='bi bi-eye-slash'; }
+  else { i.type='password'; e.className='bi bi-eye'; }
+}
+
+// ── NAVIGATION ────────────────────────────────────────────
+function navigate(view, id=null) {
+  ['viewPeopleList','viewPersonForm','viewPersonDetail','viewSettings']
+    .forEach(v => document.getElementById(v).style.display='none');
+  document.querySelectorAll('.sidebar-nav .nav-link')
+    .forEach(l => l.classList.remove('active'));
+
+  if (view==='people') {
+    show('viewPeopleList'); actNav('navPeople'); renderPeopleList();
+  } else if (view==='personNew') {
+    currentPersonId=null; show('viewPersonForm'); actNav('navPeople'); loadForm(null);
+  } else if (view==='personEdit') {
+    currentPersonId=id; show('viewPersonForm'); actNav('navPeople'); loadForm(id);
+  } else if (view==='personDetail') {
+    currentPersonId=id; show('viewPersonDetail'); actNav('navPeople'); loadDetail(id);
+  } else if (view==='settings') {
+    show('viewSettings'); actNav('navSettings'); loadSettings();
+  }
+}
+function show(id) { document.getElementById(id).style.display='block'; }
+function actNav(id) { document.getElementById(id).classList.add('active'); }
+
+// ── PEOPLE LIST ───────────────────────────────────────────
+function renderPeopleList(filter='') {
+  const all = getPeople(), pay = getPayrolls();
+  const q = filter.toLowerCase().trim();
+  const list = q ? all.filter(p => {
+    return [p.fullName,p.dni,p.passport,
+      ...(p.bankAccounts||[]).flatMap(b=>[b.iban,b.accountNumber]),
+      ...(p.wallets||[]).map(w=>w.address)
+    ].filter(Boolean).join(' ').toLowerCase().includes(q);
+  }) : all;
+
+  document.getElementById('peopleCountText').textContent =
+    `${list.length} registro${list.length!==1?'s':''}`;
+
+  const c = document.getElementById('peopleTableContainer');
+  if (!list.length) {
+    c.innerHTML = `<div class="empty-state"><i class="bi bi-people"></i>
+      <div>${q?'Sin resultados':'No hay personas registradas'}</div>
+      ${!q?`<button class="btn btn-primary mt-3" onclick="navigate('personNew')">Añadir primera persona</button>`:''}</div>`;
+    return;
+  }
+  const rows = list.map(p => {
+    const pp = pay.filter(x=>x.personId===p.id).sort((a,b)=>b.effectiveDate.localeCompare(a.effectiveDate));
+    const lat = pp[0];
+    return `<tr>
+      <td><div class="fw-semibold">${esc(p.fullName)}</div>${p.dni?`<small class="text-muted">DNI: ${esc(p.dni)}</small>`:''}</td>
+      <td>${p.passport?`<span class="badge bg-light text-dark">${esc(p.passport)}</span>`:'<span class="text-muted">—</span>'}</td>
+      <td>${(p.bankAccounts||[]).map(b=>`<small class="d-block text-muted">${esc(b.iban||b.accountNumber||b.bankName||'')}</small>`).join('')||'<span class="text-muted">—</span>'}</td>
+      <td>${lat?`<span class="badge-payroll">$${fmtMoney(lat.amount)}</span>`:'<span class="text-muted">—</span>'}</td>
+      <td><span class="badge-doc">${pp.length} nómina${pp.length!==1?'s':''}</span></td>
+      <td><div class="d-flex gap-1">
+        <button class="btn btn-outline-primary btn-sm" onclick="navigate('personDetail','${p.id}')"><i class="bi bi-eye"></i></button>
+        <button class="btn btn-outline-secondary btn-sm" onclick="navigate('personEdit','${p.id}')"><i class="bi bi-pencil"></i></button>
+        <button class="btn btn-outline-danger btn-sm" onclick="confirmDeletePerson('${p.id}')"><i class="bi bi-trash"></i></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+  c.innerHTML = `<div class="table-responsive"><table class="table table-hover mb-0">
+    <thead><tr>
+      <th>Nombre</th><th>Pasaporte</th><th>Cuentas</th>
+      <th>Última nómina</th><th>Historial</th><th>Acciones</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+// ── PERSON FORM ───────────────────────────────────────────
+function loadForm(id) {
+  document.getElementById('personForm').reset();
+  document.getElementById('bankAccounts').innerHTML =
+    '<p class="text-muted small mb-0">Sin cuentas. Haz clic en "Añadir" para agregar una.</p>';
+  document.getElementById('walletAddresses').innerHTML =
+    '<p class="text-muted small mb-0">Sin wallets. Haz clic en "Añadir" para agregar una.</p>';
+
+  if (id) {
+    document.getElementById('formTitle').textContent = 'Editar Persona';
+    const p = getPeople().find(x=>x.id===id);
+    if (!p) return;
+    document.getElementById('personId').value  = p.id;
+    document.getElementById('fName').value     = p.fullName||'';
+    document.getElementById('fDni').value      = p.dni||'';
+    document.getElementById('fPassport').value = p.passport||'';
+    (p.bankAccounts||[]).forEach(b=>addBankRow(b));
+    (p.wallets||[]).forEach(w=>addWalletRow(w));
+  } else {
+    document.getElementById('formTitle').textContent = 'Nueva Persona';
+    document.getElementById('personId').value = '';
+  }
+}
+
+function clearPlaceholder(container) {
+  const ph = container.querySelector('p.text-muted');
+  if (ph) ph.remove();
+}
+
+function addBankRow(d={}) {
+  const c = document.getElementById('bankAccounts');
+  clearPlaceholder(c);
+  const row = document.createElement('div');
+  row.className = 'row g-2 mb-2 align-items-center bank-row';
+  row.dataset.id = d.id||uid();
+  row.innerHTML = `
+    <div class="col-md-3"><input type="text" class="form-control form-control-sm" placeholder="Banco" value="${esc(d.bankName||'')}"></div>
+    <div class="col-md-4"><input type="text" class="form-control form-control-sm" placeholder="IBAN" value="${esc(d.iban||'')}"></div>
+    <div class="col-md-3"><input type="text" class="form-control form-control-sm" placeholder="Nº cuenta" value="${esc(d.accountNumber||'')}"></div>
+    <div class="col-md-2"><button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="this.closest('.bank-row').remove()"><i class="bi bi-trash"></i></button></div>`;
+  c.appendChild(row);
+}
+
+function addWalletRow(d={}) {
+  const c = document.getElementById('walletAddresses');
+  clearPlaceholder(c);
+  const row = document.createElement('div');
+  row.className = 'row g-2 mb-2 align-items-center wallet-row';
+  row.dataset.id = d.id||uid();
+  row.innerHTML = `
+    <div class="col-md-2"><input type="text" class="form-control form-control-sm" placeholder="Red (ETH, BTC...)" value="${esc(d.network||'')}"></div>
+    <div class="col-md-5"><input type="text" class="form-control form-control-sm" placeholder="Dirección *" value="${esc(d.address||'')}"></div>
+    <div class="col-md-3"><input type="text" class="form-control form-control-sm" placeholder="Etiqueta" value="${esc(d.label||'')}"></div>
+    <div class="col-md-2"><button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="this.closest('.wallet-row').remove()"><i class="bi bi-trash"></i></button></div>`;
+  c.appendChild(row);
+}
+
+function collectRows(sel, fields) {
+  return Array.from(document.querySelectorAll(sel)).map(row => {
+    const inputs = row.querySelectorAll('input');
+    const obj = { id: row.dataset.id||uid() };
+    fields.forEach((f,i) => { obj[f] = inputs[i]?.value.trim()||''; });
+    return obj;
+  }).filter(o => fields.some(f => o[f]));
+}
+
+document.getElementById('personForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const id = document.getElementById('personId').value;
+  const person = {
+    id: id||uid(),
+    fullName:  document.getElementById('fName').value.trim(),
+    dni:       document.getElementById('fDni').value.trim(),
+    passport:  document.getElementById('fPassport').value.trim(),
+    bankAccounts: collectRows('.bank-row',['bankName','iban','accountNumber']),
+    wallets:      collectRows('.wallet-row',['network','address','label']),
+    updatedAt: new Date().toISOString(),
+  };
+  let people = getPeople();
+  if (id) {
+    const idx = people.findIndex(p=>p.id===id);
+    if (idx>=0) { person.createdAt=people[idx].createdAt; people[idx]=person; }
+  } else {
+    person.createdAt = new Date().toISOString();
+    people.push(person);
+  }
+  savePeople(people);
+  toast(id?'Persona actualizada':'Persona creada');
+  navigate('personDetail', person.id);
+});
+
+// ── PERSON DETAIL ─────────────────────────────────────────
+async function loadDetail(id) {
+  const p = getPeople().find(x=>x.id===id);
+  if (!p) { navigate('people'); return; }
+  document.getElementById('detailName').textContent = p.fullName;
+  const banks = (p.bankAccounts||[]).length;
+  const wals  = (p.wallets||[]).length;
+  document.getElementById('detailInfoCards').innerHTML = [
+    {icon:'bi-person-badge', label:'DNI / Cédula',  val: p.dni||'—'},
+    {icon:'bi-passport',     label:'Pasaporte',      val: p.passport||'—'},
+    {icon:'bi-bank',         label:'Cuentas',        val: `${banks} cuenta${banks!==1?'s':''}`},
+    {icon:'bi-calendar3',    label:'Registrado',     val: fmtDate(p.createdAt)},
+  ].map(c=>`<div class="col-md-3 col-6"><div class="stat-card">
+    <i class="bi ${c.icon} fs-4 text-primary d-block mb-1"></i>
+    <div class="small text-muted">${c.label}</div>
+    <div class="fw-semibold">${esc(c.val)}</div>
+  </div></div>`).join('');
+  switchTab(currentTab);
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  ['docs','payrolls','banks','wallets'].forEach(t => {
+    const id = 'tab' + t.charAt(0).toUpperCase() + t.slice(1);
+    document.getElementById(id).style.display = t===tab?'block':'none';
+    document.querySelector(`[data-tab="${t}"]`)?.classList.toggle('active', t===tab);
+  });
+  if (tab==='docs')    renderDocs();
+  if (tab==='payrolls') renderPayrolls();
+  if (tab==='banks')   renderBanks();
+  if (tab==='wallets') renderWallets();
+}
+
+async function renderDocs() {
+  const docs = (await dbByPerson(currentPersonId)).sort((a,b)=>b.uploadedAt.localeCompare(a.uploadedAt));
+  document.getElementById('docCount').textContent = docs.length;
+  const c = document.getElementById('docsList');
+  if (!docs.length) { c.innerHTML=`<div class="empty-state"><i class="bi bi-file-earmark"></i><div>Sin documentos</div></div>`; return; }
+  c.innerHTML = docs.map(d=>{
+    const isPdf = d.mimeType==='application/pdf';
+    return `<div class="doc-item">
+      <i class="bi ${isPdf?'bi-file-earmark-pdf doc-icon pdf':'bi-file-earmark-image doc-icon img'}"></i>
+      <div class="doc-info">
+        <div class="doc-name">${esc(d.filename)}</div>
+        <div class="doc-meta">${d.category?`<span class="badge bg-light text-dark me-1">${esc(d.category)}</span>`:''}${esc(d.description||'')} · ${fmtSize(d.size)} · ${fmtDate(d.uploadedAt)}</div>
+      </div>
+      <div class="d-flex gap-1 flex-shrink-0">
+        <button class="btn btn-outline-primary btn-sm" onclick="downloadDoc('${d.id}')"><i class="bi bi-download"></i></button>
+        <button class="btn btn-outline-danger btn-sm"  onclick="confirmDelDoc('${d.id}')"><i class="bi bi-trash"></i></button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderPayrolls() {
+  const pp = getPayrolls().filter(x=>x.personId===currentPersonId)
+    .sort((a,b)=>b.effectiveDate.localeCompare(a.effectiveDate));
+  document.getElementById('payrollCount').textContent = pp.length;
+  document.getElementById('payrollDate').value = new Date().toISOString().slice(0,10);
+  const c = document.getElementById('payrollsList');
+  if (!pp.length) { c.innerHTML=`<div class="empty-state"><i class="bi bi-cash-coin"></i><div>Sin nóminas registradas</div></div>`; return; }
+  c.innerHTML = pp.map(p=>`<div class="payroll-item">
+    <div>
+      <div class="payroll-amount">$${fmtMoney(p.amount)}</div>
+      <div class="payroll-date">${fmtDate(p.effectiveDate)}</div>
+      ${p.notes?`<div class="payroll-notes">${esc(p.notes)}</div>`:''}
+    </div>
+    <button class="btn btn-outline-danger btn-sm" onclick="confirmDelPayroll('${p.id}')"><i class="bi bi-trash"></i></button>
+  </div>`).join('');
+}
+
+function renderBanks() {
+  const p = getPeople().find(x=>x.id===currentPersonId);
+  const banks = p?.bankAccounts||[];
+  const c = document.getElementById('banksList');
+  if (!banks.length) { c.innerHTML=`<div class="empty-state"><i class="bi bi-bank"></i><div>Sin cuentas bancarias</div><button class="btn btn-outline-primary mt-3 btn-sm" onclick="navigate('personEdit',currentPersonId)">Añadir cuentas</button></div>`; return; }
+  c.innerHTML = banks.map(b=>`<div class="doc-item">
+    <i class="bi bi-bank doc-icon" style="color:#0369a1"></i>
+    <div class="doc-info">
+      <div class="doc-name">${esc(b.bankName||'Banco')}</div>
+      <div class="doc-meta">${b.iban?`IBAN: ${esc(b.iban)}&nbsp;&nbsp;`:''} ${b.accountNumber?`Cuenta: ${esc(b.accountNumber)}`:''}</div>
+    </div>
+  </div>`).join('');
+}
+
+function renderWallets() {
+  const p = getPeople().find(x=>x.id===currentPersonId);
+  const wals = p?.wallets||[];
+  const c = document.getElementById('walletsList');
+  if (!wals.length) { c.innerHTML=`<div class="empty-state"><i class="bi bi-currency-bitcoin"></i><div>Sin wallets</div><button class="btn btn-outline-primary mt-3 btn-sm" onclick="navigate('personEdit',currentPersonId)">Añadir wallets</button></div>`; return; }
+  c.innerHTML = wals.map(w=>`<div class="doc-item">
+    <i class="bi bi-currency-bitcoin doc-icon" style="color:#f59e0b"></i>
+    <div class="doc-info">
+      <div class="doc-name">${esc(w.network||'Wallet')}${w.label?` — ${esc(w.label)}`:''}</div>
+      <div class="doc-meta" style="word-break:break-all">${esc(w.address)}</div>
+    </div>
+  </div>`).join('');
+}
+
+// ── DOCUMENTS ─────────────────────────────────────────────
+async function handleUpload() {
+  const fi = document.getElementById('uploadFile');
+  const cat= document.getElementById('uploadCategory').value.trim();
+  const des= document.getElementById('uploadDescription').value.trim();
+  if (!fi.files.length) { toast('Selecciona un archivo','error'); return; }
+  const file = fi.files[0];
+  if (file.size > MAX_MB*1048576) { toast(`El archivo supera ${MAX_MB} MB`,'error'); return; }
+  const ok = ['application/pdf','image/jpeg','image/png','image/gif','image/webp'];
+  if (!ok.includes(file.type)) { toast('Formato no permitido. Usa PDF o imágenes.','error'); return; }
+  const reader = new FileReader();
+  reader.onload = async e => {
+    try {
+      await dbAdd({id:uid(), personId:currentPersonId, filename:file.name, mimeType:file.type,
+        size:file.size, category:cat, description:des, uploadedAt:new Date().toISOString(), data:e.target.result});
+      bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
+      document.getElementById('uploadFile').value='';
+      document.getElementById('uploadCategory').value='';
+      document.getElementById('uploadDescription').value='';
+      toast('Documento subido'); renderDocs();
+    } catch { toast('Error al guardar el documento','error'); }
+  };
+  reader.readAsArrayBuffer(file);
+}
+async function downloadDoc(id) {
+  const d = await dbGet(id);
+  if (!d) { toast('No encontrado','error'); return; }
+  const url = URL.createObjectURL(new Blob([d.data],{type:d.mimeType}));
+  Object.assign(document.createElement('a'),{href:url,download:d.filename}).click();
+  URL.revokeObjectURL(url);
+}
+function confirmDelDoc(id) {
+  showConfirm('¿Eliminar este documento? No se puede deshacer.', async()=>{ await dbDel(id); toast('Eliminado'); renderDocs(); });
+}
+
+// ── PAYROLLS ──────────────────────────────────────────────
+function handleAddPayroll() {
+  const amt  = parseFloat(document.getElementById('payrollAmount').value);
+  const date = document.getElementById('payrollDate').value;
+  const notes= document.getElementById('payrollNotes').value.trim();
+  if (!amt||amt<=0||!date) { toast('Completa los campos requeridos','error'); return; }
+  const pay = getPayrolls();
+  pay.push({id:uid(), personId:currentPersonId, amount:amt, effectiveDate:date, notes, createdAt:new Date().toISOString()});
+  savePayrolls(pay);
+  bootstrap.Modal.getInstance(document.getElementById('payrollModal')).hide();
+  document.getElementById('payrollAmount').value='';
+  document.getElementById('payrollNotes').value='';
+  toast('Nómina registrada'); renderPayrolls();
+}
+function confirmDelPayroll(id) {
+  showConfirm('¿Eliminar esta nómina?', ()=>{ savePayrolls(getPayrolls().filter(p=>p.id!==id)); toast('Eliminada'); renderPayrolls(); });
+}
+
+// ── DELETE PERSON ─────────────────────────────────────────
+function confirmDeletePerson(id) {
+  const p = getPeople().find(x=>x.id===id);
+  if (!p) return;
+  showConfirm(`¿Eliminar a "${p.fullName}" y todos sus datos? Esta acción es irreversible.`, async()=>{
+    savePeople(getPeople().filter(x=>x.id!==id));
+    savePayrolls(getPayrolls().filter(x=>x.personId!==id));
+    await dbDelByPerson(id);
+    toast('Persona eliminada'); navigate('people');
+  });
+}
+
+// ── EXPORT EXCEL ──────────────────────────────────────────
+function exportExcel() {
+  if (!window.XLSX) { toast('Librería no disponible (requiere internet)','error'); return; }
+  const people = getPeople(), pay = getPayrolls();
+  const wb = XLSX.utils.book_new();
+  const ws1 = XLSX.utils.json_to_sheet(people.map(p=>({
+    'Nombre': p.fullName, 'DNI': p.dni||'', 'Pasaporte': p.passport||'',
+    'Bancos':    (p.bankAccounts||[]).map(b=>b.bankName).filter(Boolean).join(', '),
+    'IBANs':     (p.bankAccounts||[]).map(b=>b.iban).filter(Boolean).join(', '),
+    'Cuentas':   (p.bankAccounts||[]).map(b=>b.accountNumber).filter(Boolean).join(', '),
+    'Wallets':   (p.wallets||[]).map(w=>`${w.network||''} ${w.address}`.trim()).join('; '),
+    'Registrado': fmtDate(p.createdAt),
+  })));
+  XLSX.utils.book_append_sheet(wb, ws1, 'Personas');
+  const pMap = Object.fromEntries(people.map(p=>[p.id,p]));
+  const ws2 = XLSX.utils.json_to_sheet(pay.map(n=>({
+    'Persona': pMap[n.personId]?.fullName||'(eliminada)',
+    'DNI':     pMap[n.personId]?.dni||'',
+    'Monto':   n.amount,
+    'Fecha':   n.effectiveDate,
+    'Notas':   n.notes||'',
+  })));
+  XLSX.utils.book_append_sheet(wb, ws2, 'Nóminas');
+  XLSX.writeFile(wb, `APP_MIO_export_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast('Excel exportado');
+}
+
+// ── EXPORT PDF ────────────────────────────────────────────
+function exportPDF() {
+  if (!window.jspdf) { toast('Librería no disponible (requiere internet)','error'); return; }
+  const {jsPDF} = window.jspdf;
+  const doc = new jsPDF('l','pt','a4');
+  const people = getPeople(), pay = getPayrolls();
+  doc.setFontSize(18); doc.setTextColor(99,102,241);
+  doc.text('APP MIO — Reporte de Personas', 40, 40);
+  doc.setFontSize(9); doc.setTextColor(100,100,100);
+  doc.text(`Generado: ${new Date().toLocaleString('es-ES')} · ${people.length} personas`, 40, 58);
+  doc.autoTable({
+    startY: 75,
+    head: [['Nombre','DNI','Pasaporte','Cuentas / IBAN','Última nómina','Total nóminas','Registrado']],
+    body: people.map(p=>{
+      const pp = pay.filter(x=>x.personId===p.id).sort((a,b)=>b.effectiveDate.localeCompare(a.effectiveDate));
+      return [
+        p.fullName, p.dni||'—', p.passport||'—',
+        (p.bankAccounts||[]).map(b=>b.iban||b.accountNumber||b.bankName||'').filter(Boolean).join('\n')||'—',
+        pp[0]?`$${fmtMoney(pp[0].amount)}`:'—',
+        pp.length, fmtDate(p.createdAt)
+      ];
+    }),
+    headStyles:{fillColor:[99,102,241],textColor:255,fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[248,250,252]},
+    styles:{fontSize:8,cellPadding:5},
+    margin:{left:40,right:40},
+  });
+  doc.save(`APP_MIO_reporte_${new Date().toISOString().slice(0,10)}.pdf`);
+  toast('PDF exportado');
+}
+
+// ── SETTINGS ─────────────────────────────────────────────
+function loadSettings() {
+  document.getElementById('sUser').value = getCfg().adminUser;
+  document.getElementById('sPass').value = '';
+  document.getElementById('sPass2').value = '';
+}
+document.getElementById('settingsForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const user = document.getElementById('sUser').value.trim();
+  const p1   = document.getElementById('sPass').value;
+  const p2   = document.getElementById('sPass2').value;
+  if (!user) { toast('El usuario no puede estar vacío','error'); return; }
+  if (p1 && p1!==p2) { toast('Las contraseñas no coinciden','error'); return; }
+  const cfg = getCfg(); cfg.adminUser=user; if(p1) cfg.adminPassword=p1;
+  saveCfg(cfg); toast('Configuración guardada');
+});
+function exportData() {
+  const blob = new Blob([JSON.stringify({people:getPeople(),payrolls:getPayrolls(),exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  Object.assign(document.createElement('a'),{href:url,download:`APP_MIO_datos_${new Date().toISOString().slice(0,10)}.json`}).click();
+  URL.revokeObjectURL(url); toast('Datos exportados');
+}
+function importData(e) {
+  const file = e.target.files[0]; if(!file) return;
+  const r = new FileReader();
+  r.onload = ev => {
+    try {
+      const d = JSON.parse(ev.target.result);
+      if (!d.people||!d.payrolls) throw 0;
+      showConfirm('¿Importar datos? Esto reemplazará todos los datos actuales.',()=>{
+        savePeople(d.people); savePayrolls(d.payrolls);
+        toast('Datos importados'); navigate('people');
+      });
+    } catch { toast('Archivo JSON inválido','error'); }
+  };
+  r.readAsText(file); e.target.value='';
+}
+function confirmClearData() {
+  showConfirm('¿Borrar TODOS los datos? Esta acción es irreversible.',()=>{
+    localStorage.removeItem('amio_people'); localStorage.removeItem('amio_payrolls');
+    idb.transaction(STORE,'readwrite').objectStore(STORE).clear();
+    toast('Datos borrados'); navigate('people');
+  });
+}
+
+// ── EVENT LISTENERS ───────────────────────────────────────
+document.getElementById('loginForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const err = document.getElementById('loginError');
+  if (login(document.getElementById('loginUser').value, document.getElementById('loginPass').value)) {
+    err.classList.add('d-none');
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appContainer').style.display = 'flex';
+    navigate('people');
+  } else { err.classList.remove('d-none'); }
+});
+document.getElementById('searchInput').addEventListener('input', function() { renderPeopleList(this.value); });
+document.getElementById('confirmBtn').addEventListener('click', () => {
+  if (confirmCb) { confirmCb(); confirmCb=null; }
+  bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide();
+});
+
+// ── INIT ──────────────────────────────────────────────────
+async function init() {
+  await initDB();
+  if (isLoggedIn()) {
+    document.getElementById('loginScreen').style.display = 'none';
+    document.getElementById('appContainer').style.display = 'flex';
+    navigate('people');
+  }
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
