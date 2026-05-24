@@ -93,7 +93,7 @@ def register_page(token: str, request: Request, db: Session = Depends(get_db)):
             "error": error,
         },
     )
-    resp.set_cookie("reg_csrf", csrf, httponly=True, samesite="strict", max_age=600)
+    resp.set_cookie("reg_csrf", csrf, httponly=True, samesite="lax", max_age=600)
     return resp
 
 
@@ -178,7 +178,7 @@ async def register_submit(
         USER_SESSION_COOKIE_NAME,
         session_token,
         httponly=True,
-        samesite="strict",
+        samesite="lax",
         max_age=USER_SESSION_MAX_AGE,
     )
     response.delete_cookie("reg_csrf")
@@ -198,7 +198,7 @@ def _reg_error(request, token, invitation, msg, _extra):
         },
         status_code=400,
     )
-    resp.set_cookie("reg_csrf", csrf, httponly=True, samesite="strict", max_age=600)
+    resp.set_cookie("reg_csrf", csrf, httponly=True, samesite="lax", max_age=600)
     return resp
 
 
@@ -218,7 +218,7 @@ def user_login_page(request: Request, next: str = "/portal/"):
         "user_login.html",
         {"request": request, "next": next, "csrf_token": csrf, "error": None},
     )
-    resp.set_cookie("ulogin_csrf", csrf, httponly=True, samesite="strict", max_age=300)
+    resp.set_cookie("ulogin_csrf", csrf, httponly=True, samesite="lax", max_age=300)
     return resp
 
 
@@ -262,7 +262,7 @@ async def user_login_submit(
         USER_SESSION_COOKIE_NAME,
         session_token,
         httponly=True,
-        samesite="strict",
+        samesite="lax",
         max_age=USER_SESSION_MAX_AGE,
     )
     response.delete_cookie("ulogin_csrf")
@@ -276,7 +276,7 @@ def _login_error(request, next_url, msg):
         {"request": request, "next": next_url, "csrf_token": csrf, "error": msg},
         status_code=401,
     )
-    resp.set_cookie("ulogin_csrf", csrf, httponly=True, samesite="strict", max_age=300)
+    resp.set_cookie("ulogin_csrf", csrf, httponly=True, samesite="lax", max_age=300)
     return resp
 
 
