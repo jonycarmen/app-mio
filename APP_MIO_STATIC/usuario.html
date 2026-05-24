@@ -72,6 +72,25 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 .admin-link a { color: var(--primary); text-decoration: none; font-weight: 500; }
 .admin-link a:hover { text-decoration: underline; }
 
+/* UPLOAD ACTIONS */
+.upload-action { display: flex; flex-direction: column; align-items: center; gap: .5rem; padding: 1.1rem .5rem; border: 2px dashed #e2e8f0; border-radius: 12px; cursor: pointer; transition: all .2s; background: #f8fafc; text-align: center; user-select: none; }
+.upload-action:hover, .upload-action:active { border-color: var(--primary); background: #ecfeff; }
+.upload-action i { font-size: 2rem; }
+.upload-action span { font-size: .78rem; font-weight: 600; color: #475569; line-height: 1.2; }
+
+/* PHOTO GRID */
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .6rem; }
+.photo-thumb { position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 1; background: #f1f5f9; }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-thumb .ph-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.45); opacity: 0; transition: .2s; display: flex; align-items: center; justify-content: center; gap: .4rem; }
+.photo-thumb:hover .ph-overlay { opacity: 1; }
+.photo-thumb .ph-name { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent, rgba(0,0,0,.6)); color: #fff; font-size: .7rem; padding: .3rem .4rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* DOC FILTER TABS */
+.doc-tabs .nav-link { color: #64748b; border: none; padding: .55rem 1rem; border-bottom: 2px solid transparent; margin-bottom: -2px; cursor: pointer; font-size: .9rem; }
+.doc-tabs .nav-link.active { color: var(--primary); border-bottom-color: var(--primary); font-weight: 600; }
+.doc-tabs .nav-link:hover { color: var(--primary); }
+
 @media (max-width: 768px) {
   .sidebar { transform: translateX(-100%); transition: transform .3s; }
   .sidebar.open { transform: translateX(0); }
@@ -280,18 +299,48 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 
     <!-- ── DOCUMENTOS ── -->
     <div id="viewDocs" style="display:none">
-      <div class="d-flex align-items-center justify-content-between mb-4">
+      <div class="d-flex align-items-center justify-content-between mb-3">
         <div>
-          <h4 class="fw-bold mb-0">Mis Documentos</h4>
-          <p class="text-muted small mb-0" id="docCountText">0 documentos</p>
+          <h4 class="fw-bold mb-0">Mis Documentos y Fotos</h4>
+          <p class="text-muted small mb-0" id="docCountText">0 archivos</p>
         </div>
-        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
-          <i class="bi bi-upload me-1"></i>Subir documento
-        </button>
       </div>
-      <div class="form-card">
-        <div id="myDocsList"></div>
+
+      <!-- Botones de subida -->
+      <div class="row g-3 mb-4">
+        <div class="col-4">
+          <div class="upload-action" onclick="document.getElementById('inputPdf').click()">
+            <i class="bi bi-file-earmark-pdf" style="color:#dc2626"></i>
+            <span>Subir PDF</span>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="upload-action" onclick="document.getElementById('inputGallery').click()">
+            <i class="bi bi-images" style="color:#7c3aed"></i>
+            <span>Galería</span>
+          </div>
+        </div>
+        <div class="col-4">
+          <div class="upload-action" onclick="document.getElementById('inputCamera').click()">
+            <i class="bi bi-camera-fill" style="color:#0891b2"></i>
+            <span>Cámara</span>
+          </div>
+        </div>
       </div>
+
+      <!-- Inputs ocultos -->
+      <input type="file" id="inputPdf"     accept=".pdf"   style="display:none" onchange="prepareUpload(this,'pdf')">
+      <input type="file" id="inputGallery" accept="image/*" multiple style="display:none" onchange="prepareUpload(this,'photo')">
+      <input type="file" id="inputCamera"  accept="image/*" capture="environment" style="display:none" onchange="prepareUpload(this,'photo')">
+
+      <!-- Tabs filtro -->
+      <ul class="nav nav-tabs doc-tabs mb-3" style="border-bottom:2px solid #e2e8f0">
+        <li class="nav-item"><a class="nav-link active" data-filter="all"   onclick="filterDocs('all')"><i class="bi bi-grid-3x3-gap me-1"></i>Todos</a></li>
+        <li class="nav-item"><a class="nav-link"        data-filter="pdf"   onclick="filterDocs('pdf')"><i class="bi bi-file-earmark-pdf me-1"></i>PDFs</a></li>
+        <li class="nav-item"><a class="nav-link"        data-filter="photo" onclick="filterDocs('photo')"><i class="bi bi-images me-1"></i>Fotos</a></li>
+      </ul>
+
+      <div id="myDocsList"></div>
     </div>
 
     <!-- ── EXPORTAR ── -->
@@ -334,28 +383,24 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
   <div class="modal-dialog">
     <div class="modal-content">
       <div class="modal-header">
-        <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Subir Documento</h5>
+        <h5 class="modal-title" id="uploadModalTitle"><i class="bi bi-upload me-2"></i>Subir archivo</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <div class="mb-3">
-          <label class="form-label">Archivo *</label>
-          <input type="file" id="uploadFile" class="form-control" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp">
-          <div class="form-text">Máximo 10 MB · PDF, JPG, PNG, GIF, WebP</div>
-        </div>
+        <div id="uploadPreview" class="mb-3 text-center"></div>
         <div class="mb-3">
           <label class="form-label">Categoría</label>
-          <input type="text" id="uploadCat" class="form-control" placeholder="Ej: Identidad, Contrato, Factura...">
+          <input type="text" id="uploadCat" class="form-control" placeholder="Ej: Identidad, Contrato, Factura, Personal...">
         </div>
         <div class="mb-0">
-          <label class="form-label">Descripción</label>
-          <input type="text" id="uploadDesc" class="form-control" placeholder="Descripción del documento">
+          <label class="form-label">Descripción <span class="text-muted fw-normal">(opcional)</span></label>
+          <input type="text" id="uploadDesc" class="form-control" placeholder="Breve descripción del archivo">
         </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
         <button type="button" class="btn btn-primary" onclick="handleUpload()">
-          <i class="bi bi-upload me-1"></i>Subir
+          <i class="bi bi-cloud-upload me-1"></i>Guardar
         </button>
       </div>
     </div>
@@ -673,55 +718,150 @@ async function changePassword() {
 }
 
 // ── DOCUMENTOS ────────────────────────────────────────────
+let pendingFiles = [];        // archivos listos para guardar
+let pendingType  = 'pdf';
+let currentFilter = 'all';
+
+function filterDocs(f) {
+  currentFilter = f;
+  document.querySelectorAll('.doc-tabs .nav-link').forEach(a => {
+    a.classList.toggle('active', a.dataset.filter === f);
+  });
+  loadDocs();
+}
+
 async function loadDocs() {
-  const docs=(await udbByUser(currentUserId)).sort((a,b)=>b.uploadedAt.localeCompare(a.uploadedAt));
-  document.getElementById('docCountText').textContent=`${docs.length} documento${docs.length!==1?'s':''}`;
-  const c=document.getElementById('myDocsList');
-  if(!docs.length){c.innerHTML=`<div class="empty-state"><i class="bi bi-folder2-open"></i><div>Aún no has subido documentos</div></div>`;return;}
-  c.innerHTML=docs.map(d=>{
-    const isPdf=d.mimeType==='application/pdf';
-    return `<div class="doc-item">
-      <i class="bi ${isPdf?'bi-file-earmark-pdf doc-icon pdf':'bi-file-earmark-image doc-icon img'}"></i>
+  const all = (await udbByUser(currentUserId)).sort((a,b)=>b.uploadedAt.localeCompare(a.uploadedAt));
+  const isPhoto = d => d.mimeType && d.mimeType.startsWith('image/');
+  const docs = currentFilter==='all' ? all
+    : currentFilter==='pdf'   ? all.filter(d=>d.mimeType==='application/pdf')
+    : all.filter(isPhoto);
+
+  document.getElementById('docCountText').textContent = `${all.length} archivo${all.length!==1?'s':''}`;
+  const c = document.getElementById('myDocsList');
+
+  if (!docs.length) {
+    c.innerHTML = `<div class="empty-state"><i class="bi bi-folder2-open"></i>
+      <div>${all.length ? 'Sin archivos en esta categoría' : 'Aún no has subido archivos'}</div>
+      <div class="small mt-1">Usa los botones de arriba para subir PDFs o fotos</div></div>`;
+    return;
+  }
+
+  const photos = docs.filter(isPhoto);
+  const pdfs   = docs.filter(d=>!isPhoto(d));
+
+  let html = '';
+
+  // Fotos → cuadrícula con miniaturas
+  if (photos.length) {
+    html += `<div class="photo-grid mb-4">`;
+    for (const d of photos) {
+      const url = URL.createObjectURL(new Blob([d.data],{type:d.mimeType}));
+      html += `<div class="photo-thumb">
+        <img src="${url}" loading="lazy" onload="URL.revokeObjectURL(this.src)">
+        <div class="ph-name">${esc(d.filename)}</div>
+        <div class="ph-overlay">
+          <button class="btn btn-sm btn-light" onclick="downloadDoc('${d.id}')" title="Descargar"><i class="bi bi-download"></i></button>
+          <button class="btn btn-sm btn-danger" onclick="confirmDelDoc('${d.id}')" title="Eliminar"><i class="bi bi-trash"></i></button>
+        </div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // PDFs → lista
+  if (pdfs.length) {
+    html += pdfs.map(d=>`<div class="doc-item">
+      <i class="bi bi-file-earmark-pdf doc-icon pdf fs-3"></i>
       <div class="doc-info">
         <div class="doc-name">${esc(d.filename)}</div>
         <div class="doc-meta">${d.category?`<span class="badge bg-light text-dark me-1">${esc(d.category)}</span>`:''}${esc(d.description||'')} · ${fmtSize(d.size)} · ${fmtDate(d.uploadedAt)}</div>
       </div>
       <div class="d-flex gap-1 flex-shrink-0">
         <button class="btn btn-outline-primary btn-sm" onclick="downloadDoc('${d.id}')"><i class="bi bi-download"></i></button>
-        <button class="btn btn-outline-danger btn-sm" onclick="confirmDelDoc('${d.id}')"><i class="bi bi-trash"></i></button>
+        <button class="btn btn-outline-danger btn-sm"  onclick="confirmDelDoc('${d.id}')"><i class="bi bi-trash"></i></button>
       </div>
-    </div>`;
-  }).join('');
+    </div>`).join('');
+  }
+
+  c.innerHTML = html;
+}
+
+// Recibe el input y tipo ('pdf' o 'photo'), maneja múltiples fotos o un solo PDF
+async function prepareUpload(input, type) {
+  const files = Array.from(input.files);
+  input.value = '';
+  if (!files.length) return;
+
+  const okTypes = ['application/pdf','image/jpeg','image/png','image/gif','image/webp'];
+  const valid = files.filter(f => okTypes.includes(f.type) && f.size <= MAX_MB*1048576);
+  const tooBig = files.filter(f => f.size > MAX_MB*1048576);
+  if (tooBig.length) toast(`${tooBig.length} archivo(s) superan ${MAX_MB} MB y fueron omitidos`, 'error');
+  if (!valid.length) return;
+
+  if (type==='photo' && valid.length > 1) {
+    // Múltiples fotos: guardar todas directamente sin modal
+    let count = 0;
+    for (const file of valid) {
+      const buf = await file.arrayBuffer();
+      await udbAdd({id:uid(),userId:currentUserId,filename:file.name,mimeType:file.type,
+        size:file.size,category:'Foto',description:'',uploadedAt:new Date().toISOString(),data:buf});
+      count++;
+    }
+    toast(`${count} foto${count!==1?'s':''} guardada${count!==1?'s':''}`);
+    loadDocs();
+    return;
+  }
+
+  // Una sola foto o PDF → mostrar modal con preview
+  pendingFiles = valid;
+  pendingType  = type;
+  const file = valid[0];
+
+  document.getElementById('uploadModalTitle').innerHTML =
+    type==='pdf' ? '<i class="bi bi-file-earmark-pdf me-2" style="color:#dc2626"></i>Subir PDF'
+                 : '<i class="bi bi-image me-2" style="color:#7c3aed"></i>Subir foto';
+
+  const prev = document.getElementById('uploadPreview');
+  if (type==='photo') {
+    const url = URL.createObjectURL(file);
+    prev.innerHTML = `<img src="${url}" class="img-fluid rounded mb-1" style="max-height:220px;object-fit:contain" onload="URL.revokeObjectURL(this.src)">
+      <div class="small text-muted">${esc(file.name)} · ${fmtSize(file.size)}</div>`;
+  } else {
+    prev.innerHTML = `<div class="doc-item mb-1"><i class="bi bi-file-earmark-pdf doc-icon pdf fs-2"></i>
+      <div class="doc-info"><div class="doc-name">${esc(file.name)}</div><div class="doc-meta">${fmtSize(file.size)}</div></div></div>`;
+  }
+
+  document.getElementById('uploadCat').value  = type==='photo' ? 'Foto' : '';
+  document.getElementById('uploadDesc').value = '';
+  new bootstrap.Modal(document.getElementById('uploadModal')).show();
 }
 
 async function handleUpload() {
-  const fi=document.getElementById('uploadFile');
-  const cat=document.getElementById('uploadCat').value.trim();
-  const des=document.getElementById('uploadDesc').value.trim();
-  if(!fi.files.length){toast('Selecciona un archivo','error');return;}
-  const file=fi.files[0];
-  if(file.size>MAX_MB*1048576){toast(`El archivo supera ${MAX_MB} MB`,'error');return;}
-  const okTypes=['application/pdf','image/jpeg','image/png','image/gif','image/webp'];
-  if(!okTypes.includes(file.type)){toast('Formato no permitido','error');return;}
-  const reader=new FileReader();
-  reader.onload=async e=>{
-    try{
-      await udbAdd({id:uid(),userId:currentUserId,filename:file.name,mimeType:file.type,size:file.size,category:cat,description:des,uploadedAt:new Date().toISOString(),data:e.target.result});
-      bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
-      document.getElementById('uploadFile').value='';document.getElementById('uploadCat').value='';document.getElementById('uploadDesc').value='';
-      toast('Documento subido');loadDocs();
-    }catch{toast('Error al guardar','error');}
-  };
-  reader.readAsArrayBuffer(file);
+  if (!pendingFiles.length) return;
+  const cat = document.getElementById('uploadCat').value.trim();
+  const des = document.getElementById('uploadDesc').value.trim();
+  try {
+    for (const file of pendingFiles) {
+      const buf = await file.arrayBuffer();
+      await udbAdd({id:uid(),userId:currentUserId,filename:file.name,mimeType:file.type,
+        size:file.size,category:cat,description:des,uploadedAt:new Date().toISOString(),data:buf});
+    }
+    bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
+    pendingFiles = [];
+    toast('Archivo guardado');
+    loadDocs();
+  } catch { toast('Error al guardar','error'); }
 }
+
 async function downloadDoc(id) {
-  const d=await udbGet(id);if(!d){toast('No encontrado','error');return;}
-  const url=URL.createObjectURL(new Blob([d.data],{type:d.mimeType}));
+  const d = await udbGet(id); if(!d){toast('No encontrado','error');return;}
+  const url = URL.createObjectURL(new Blob([d.data],{type:d.mimeType}));
   Object.assign(document.createElement('a'),{href:url,download:d.filename}).click();
   URL.revokeObjectURL(url);
 }
 function confirmDelDoc(id) {
-  showConfirm('¿Eliminar este documento?',async()=>{await udbDel(id);toast('Eliminado');loadDocs();});
+  showConfirm('¿Eliminar este archivo?', async()=>{ await udbDel(id); toast('Eliminado'); loadDocs(); });
 }
 
 // ── EXPORTAR ─────────────────────────────────────────────
