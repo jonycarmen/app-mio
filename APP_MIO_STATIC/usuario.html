@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>APP MIO — Mi Portal</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
+<style>
+:root { --primary: #0891b2; --primary-dark: #0e7490; }
+body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; margin: 0; }
+
+/* AUTH */
+#authScreen {
+  min-height: 100vh; display: flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, #083344 0%, #0e7490 50%, #0891b2 100%);
+}
+.auth-card {
+  background: #fff; border-radius: 16px; padding: 2.5rem;
+  width: 100%; max-width: 440px; box-shadow: 0 25px 50px rgba(0,0,0,.3);
+}
+.auth-logo { font-size: 1.9rem; font-weight: 800; color: var(--primary); text-align: center; margin-bottom: .25rem; }
+.auth-subtitle { text-align: center; color: #64748b; margin-bottom: 1.75rem; font-size: .95rem; }
+.auth-toggle { display: flex; background: #f1f5f9; border-radius: 10px; padding: 4px; margin-bottom: 1.5rem; }
+.auth-toggle button { flex: 1; border: none; background: transparent; padding: .5rem; border-radius: 8px; font-size: .9rem; font-weight: 500; color: #64748b; cursor: pointer; transition: all .2s; }
+.auth-toggle button.active { background: #fff; color: var(--primary); box-shadow: 0 1px 4px rgba(0,0,0,.12); font-weight: 600; }
+
+/* LAYOUT */
+.app-wrapper { display: flex; min-height: 100vh; }
+.sidebar {
+  width: 220px; background: linear-gradient(180deg, #083344 0%, #0e7490 100%);
+  min-height: 100vh; position: fixed; top: 0; left: 0; z-index: 100;
+  display: flex; flex-direction: column; padding-bottom: 1rem;
+}
+.sidebar-brand { padding: 1.5rem 1.25rem 1rem; font-size: 1.2rem; font-weight: 800; color: #fff; border-bottom: 1px solid rgba(255,255,255,.1); margin-bottom: .5rem; }
+.sidebar-user { padding: .75rem 1.25rem 1rem; border-bottom: 1px solid rgba(255,255,255,.1); margin-bottom: .5rem; }
+.sidebar-user .name { font-weight: 600; color: #fff; font-size: .95rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-user .email { font-size: .75rem; color: rgba(255,255,255,.55); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sidebar-nav { flex: 1; padding: 0 .75rem; }
+.sidebar-nav .nav-item { margin-bottom: 2px; }
+.sidebar-nav .nav-link { color: rgba(255,255,255,.65); border-radius: 8px; padding: .6rem .9rem; font-size: .92rem; display: flex; align-items: center; gap: .6rem; transition: all .15s; cursor: pointer; }
+.sidebar-nav .nav-link:hover { color: #fff; background: rgba(255,255,255,.1); }
+.sidebar-nav .nav-link.active { color: #fff; background: var(--primary); }
+.sidebar-nav .nav-link i { font-size: 1rem; }
+.sidebar-footer { padding: 0 .75rem; }
+.main-content { margin-left: 220px; padding: 2rem; width: calc(100% - 220px); }
+
+/* CARDS */
+.stat-card { background: #fff; border-radius: 12px; padding: 1.25rem 1.5rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); border: 1px solid #e2e8f0; }
+.form-card { background: #fff; border-radius: 12px; padding: 2rem; box-shadow: 0 1px 3px rgba(0,0,0,.08); border: 1px solid #e2e8f0; }
+.section-title { font-size: .85rem; font-weight: 700; color: var(--primary); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 1rem; padding-bottom: .5rem; border-bottom: 2px solid #cffafe; }
+
+/* ITEMS */
+.doc-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: .75rem 1rem; margin-bottom: .5rem; display: flex; align-items: center; gap: .75rem; }
+.doc-icon { font-size: 1.5rem; }
+.doc-icon.pdf { color: #dc2626; }
+.doc-icon.img { color: #7c3aed; }
+.doc-info { flex: 1; min-width: 0; }
+.doc-name { font-weight: 500; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.doc-meta { font-size: .78rem; color: #64748b; }
+
+/* MISC */
+.btn-primary { background: var(--primary); border-color: var(--primary); }
+.btn-primary:hover { background: var(--primary-dark); border-color: var(--primary-dark); }
+.btn-outline-primary { color: var(--primary); border-color: var(--primary); }
+.btn-outline-primary:hover { background: var(--primary); border-color: var(--primary); color: #fff; }
+.empty-state { text-align: center; padding: 3rem 1rem; color: #94a3b8; }
+.empty-state i { font-size: 3rem; display: block; margin-bottom: 1rem; }
+.toast-container { position: fixed; bottom: 1rem; right: 1rem; z-index: 9999; }
+.form-label { font-weight: 500; font-size: .9rem; color: #374151; }
+.admin-link { text-align: center; margin-top: 1.25rem; font-size: .85rem; color: #64748b; }
+.admin-link a { color: var(--primary); text-decoration: none; font-weight: 500; }
+.admin-link a:hover { text-decoration: underline; }
+
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); transition: transform .3s; }
+  .sidebar.open { transform: translateX(0); }
+  .main-content { margin-left: 0; width: 100%; padding: 1rem; }
+  .mobile-menu-btn { display: block !important; }
+}
+.mobile-menu-btn { display: none; }
+</style>
+</head>
+<body>
+
+<!-- ==================== AUTH ==================== -->
+<div id="authScreen">
+  <div class="auth-card">
+    <div class="auth-logo"><i class="bi bi-person-circle"></i> APP MIO</div>
+    <p class="auth-subtitle">Portal Personal</p>
+
+    <div class="auth-toggle">
+      <button id="btnToggleLogin" class="active" onclick="showAuthTab('login')">Iniciar sesión</button>
+      <button id="btnToggleRegister" onclick="showAuthTab('register')">Registrarme</button>
+    </div>
+
+    <!-- LOGIN -->
+    <div id="formLogin">
+      <div class="mb-3">
+        <label class="form-label">Email</label>
+        <input type="email" id="lEmail" class="form-control" placeholder="tu@email.com" autocomplete="email">
+      </div>
+      <div class="mb-4">
+        <label class="form-label">Contraseña</label>
+        <div class="input-group">
+          <input type="password" id="lPass" class="form-control" placeholder="••••••••" autocomplete="current-password">
+          <button type="button" class="btn btn-outline-secondary" onclick="toggleVis('lPass','eyeL')"><i class="bi bi-eye" id="eyeL"></i></button>
+        </div>
+      </div>
+      <div id="loginErr" class="alert alert-danger d-none py-2 small mb-3"></div>
+      <button class="btn btn-primary w-100" onclick="doLogin()">
+        <i class="bi bi-box-arrow-in-right me-1"></i>Entrar
+      </button>
+    </div>
+
+    <!-- REGISTER -->
+    <div id="formRegister" style="display:none">
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label">Nombre completo *</label>
+          <input type="text" id="rName" class="form-control" placeholder="Ej: Juan García López">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Email *</label>
+          <input type="email" id="rEmail" class="form-control" placeholder="tu@email.com" autocomplete="email">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Teléfono</label>
+          <input type="tel" id="rPhone" class="form-control" placeholder="+1 555 000000">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Contraseña *</label>
+          <div class="input-group">
+            <input type="password" id="rPass" class="form-control" placeholder="Mínimo 6 caracteres" autocomplete="new-password">
+            <button type="button" class="btn btn-outline-secondary" onclick="toggleVis('rPass','eyeR')"><i class="bi bi-eye" id="eyeR"></i></button>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Confirmar contraseña *</label>
+          <input type="password" id="rPass2" class="form-control" placeholder="Repite la contraseña" autocomplete="new-password">
+        </div>
+      </div>
+      <div id="registerErr" class="alert alert-danger d-none py-2 small mt-3 mb-0"></div>
+      <button class="btn btn-primary w-100 mt-3" onclick="doRegister()">
+        <i class="bi bi-person-plus me-1"></i>Crear cuenta
+      </button>
+    </div>
+
+    <div class="admin-link">
+      ¿Eres administrador? <a href="index.html">Panel de administración</a>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== APP ==================== -->
+<div id="appContainer" style="display:none">
+  <!-- SIDEBAR -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-brand"><i class="bi bi-person-circle me-2"></i>Mi Portal</div>
+    <div class="sidebar-user">
+      <div class="name" id="sidebarName">Usuario</div>
+      <div class="email" id="sidebarEmail">email@example.com</div>
+    </div>
+    <div class="sidebar-nav">
+      <ul class="nav flex-column">
+        <li class="nav-item">
+          <a class="nav-link active" id="navPerfil" onclick="navigate('perfil')">
+            <i class="bi bi-person-lines-fill"></i>Mi Perfil
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" id="navDocs" onclick="navigate('docs')">
+            <i class="bi bi-folder2-open"></i>Mis Documentos
+          </a>
+        </li>
+        <li class="nav-item">
+          <a class="nav-link" id="navExport" onclick="navigate('export')">
+            <i class="bi bi-box-arrow-up"></i>Exportar datos
+          </a>
+        </li>
+      </ul>
+    </div>
+    <div class="sidebar-footer">
+      <a class="nav-link" style="color:rgba(255,100,100,.8)" onclick="doLogout()">
+        <i class="bi bi-box-arrow-right"></i>Cerrar sesión
+      </a>
+    </div>
+  </nav>
+
+  <main class="main-content">
+
+    <!-- ── PERFIL ── -->
+    <div id="viewPerfil">
+      <h4 class="fw-bold mb-4">Mi Perfil</h4>
+
+      <div class="form-card mb-4">
+        <p class="section-title"><i class="bi bi-person me-2"></i>Información Personal</p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Nombre completo *</label>
+            <input type="text" id="pName" class="form-control">
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Email</label>
+            <input type="email" id="pEmail" class="form-control" readonly style="background:#f8fafc">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Teléfono</label>
+            <input type="tel" id="pPhone" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">DNI / Cédula</label>
+            <input type="text" id="pDni" class="form-control" placeholder="Ej: 12345678A">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Pasaporte</label>
+            <input type="text" id="pPassport" class="form-control" placeholder="Ej: AB123456">
+          </div>
+        </div>
+        <div class="mt-3">
+          <button class="btn btn-primary" onclick="savePerfil()">
+            <i class="bi bi-check-lg me-1"></i>Guardar información
+          </button>
+        </div>
+      </div>
+
+      <div class="form-card mb-4">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <p class="section-title mb-0"><i class="bi bi-bank me-2"></i>Mis Cuentas Bancarias</p>
+          <button class="btn btn-outline-primary btn-sm" onclick="addBank()">
+            <i class="bi bi-plus me-1"></i>Añadir
+          </button>
+        </div>
+        <div id="bankList"></div>
+        <div class="mt-3" id="bankSaveBtn" style="display:none">
+          <button class="btn btn-primary btn-sm" onclick="saveBanks()">
+            <i class="bi bi-check-lg me-1"></i>Guardar cuentas
+          </button>
+        </div>
+      </div>
+
+      <div class="form-card mb-4">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <p class="section-title mb-0"><i class="bi bi-currency-bitcoin me-2"></i>Mis Wallets</p>
+          <button class="btn btn-outline-primary btn-sm" onclick="addWallet()">
+            <i class="bi bi-plus me-1"></i>Añadir
+          </button>
+        </div>
+        <div id="walletList"></div>
+        <div class="mt-3" id="walletSaveBtn" style="display:none">
+          <button class="btn btn-primary btn-sm" onclick="saveWallets()">
+            <i class="bi bi-check-lg me-1"></i>Guardar wallets
+          </button>
+        </div>
+      </div>
+
+      <div class="form-card">
+        <p class="section-title"><i class="bi bi-shield-lock me-2"></i>Cambiar Contraseña</p>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <label class="form-label">Contraseña actual *</label>
+            <input type="password" id="cpOld" class="form-control">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Nueva contraseña *</label>
+            <input type="password" id="cpNew" class="form-control" placeholder="Mínimo 6 caracteres">
+          </div>
+          <div class="col-md-4">
+            <label class="form-label">Confirmar nueva *</label>
+            <input type="password" id="cpNew2" class="form-control">
+          </div>
+        </div>
+        <div class="mt-3">
+          <button class="btn btn-outline-primary" onclick="changePassword()">
+            <i class="bi bi-key me-1"></i>Cambiar contraseña
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── DOCUMENTOS ── -->
+    <div id="viewDocs" style="display:none">
+      <div class="d-flex align-items-center justify-content-between mb-4">
+        <div>
+          <h4 class="fw-bold mb-0">Mis Documentos</h4>
+          <p class="text-muted small mb-0" id="docCountText">0 documentos</p>
+        </div>
+        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+          <i class="bi bi-upload me-1"></i>Subir documento
+        </button>
+      </div>
+      <div class="form-card">
+        <div id="myDocsList"></div>
+      </div>
+    </div>
+
+    <!-- ── EXPORTAR ── -->
+    <div id="viewExport" style="display:none">
+      <h4 class="fw-bold mb-4">Exportar mis datos</h4>
+      <div class="form-card mb-4">
+        <p class="section-title"><i class="bi bi-download me-2"></i>Descargar mis datos</p>
+        <p class="text-muted small mb-3">
+          Exporta tu perfil completo (información personal, cuentas bancarias, wallets) en formato JSON.
+          El administrador puede importar este archivo para actualizar tu registro.
+        </p>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-primary" onclick="exportJSON()">
+            <i class="bi bi-filetype-json me-1"></i>Exportar JSON (para el admin)
+          </button>
+          <button class="btn btn-outline-success" onclick="exportExcel()">
+            <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
+          </button>
+          <button class="btn btn-outline-danger" onclick="exportPDF()">
+            <i class="bi bi-file-earmark-pdf me-1"></i>Exportar PDF
+          </button>
+        </div>
+      </div>
+      <div class="form-card">
+        <p class="section-title"><i class="bi bi-info-circle me-2"></i>¿Cómo compartir con el administrador?</p>
+        <ol class="text-muted small mb-0" style="line-height: 2">
+          <li>Haz clic en <strong>"Exportar JSON"</strong> — se descarga un archivo con tus datos.</li>
+          <li>Envía ese archivo al administrador por <strong>WhatsApp, email o cualquier medio</strong>.</li>
+          <li>El administrador lo importa en el panel de administración.</li>
+          <li>Tus datos quedan registrados oficialmente en el sistema.</li>
+        </ol>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ==================== MODALS ==================== -->
+<div class="modal fade" id="uploadModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-upload me-2"></i>Subir Documento</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="mb-3">
+          <label class="form-label">Archivo *</label>
+          <input type="file" id="uploadFile" class="form-control" accept=".pdf,.jpg,.jpeg,.png,.gif,.webp">
+          <div class="form-text">Máximo 10 MB · PDF, JPG, PNG, GIF, WebP</div>
+        </div>
+        <div class="mb-3">
+          <label class="form-label">Categoría</label>
+          <input type="text" id="uploadCat" class="form-control" placeholder="Ej: Identidad, Contrato, Factura...">
+        </div>
+        <div class="mb-0">
+          <label class="form-label">Descripción</label>
+          <input type="text" id="uploadDesc" class="form-control" placeholder="Descripción del documento">
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary" onclick="handleUpload()">
+          <i class="bi bi-upload me-1"></i>Subir
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="confirmModal" tabindex="-1">
+  <div class="modal-dialog modal-sm">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Confirmar</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body"><p id="confirmMsg" class="mb-0">¿Estás seguro?</p></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-danger" id="confirmBtn">Confirmar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast-container">
+  <div id="toastEl" class="toast align-items-center text-white border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body" id="toastMsg">Listo</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
+<script>
+'use strict';
+
+// ── CONFIG ────────────────────────────────────────────────
+const UDB_NAME = 'appMioUserDB', UDB_VER = 1, UDOC_STORE = 'userDocs', MAX_MB = 10;
+let udb = null;
+let currentUserId = null;
+let confirmCb = null;
+
+// ── UTILS ─────────────────────────────────────────────────
+function uid() {
+  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16));
+}
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function fmtDate(d) { if(!d) return '—'; return new Date(d).toLocaleDateString('es-ES',{day:'2-digit',month:'2-digit',year:'numeric'}); }
+function fmtSize(b) { if(b<1024) return b+' B'; if(b<1048576) return (b/1024).toFixed(1)+' KB'; return (b/1048576).toFixed(1)+' MB'; }
+
+function toast(msg, type='success') {
+  const el = document.getElementById('toastEl');
+  el.className = `toast align-items-center text-white border-0 bg-${type==='error'?'danger':'success'}`;
+  document.getElementById('toastMsg').textContent = msg;
+  new bootstrap.Toast(el,{delay:3000}).show();
+}
+function showConfirm(msg, cb) {
+  document.getElementById('confirmMsg').textContent = msg;
+  confirmCb = cb;
+  new bootstrap.Modal(document.getElementById('confirmModal')).show();
+}
+document.getElementById('confirmBtn').addEventListener('click', () => {
+  if (confirmCb) { confirmCb(); confirmCb=null; }
+  bootstrap.Modal.getInstance(document.getElementById('confirmModal')).hide();
+});
+
+// ── HASH PASSWORD ─────────────────────────────────────────
+async function hashPwd(pwd) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pwd));
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+// ── STORAGE ───────────────────────────────────────────────
+const getUsers   = () => JSON.parse(localStorage.getItem('amio_users') || '[]');
+const saveUsers  = a  => localStorage.setItem('amio_users', JSON.stringify(a));
+const getSess    = () => sessionStorage.getItem('amio_user_sess');
+const setSess    = id => sessionStorage.setItem('amio_user_sess', id);
+const clearSess  = () => sessionStorage.removeItem('amio_user_sess');
+const getMe      = () => getUsers().find(u => u.id === currentUserId);
+
+// ── INDEXEDDB ─────────────────────────────────────────────
+function initUDB() {
+  return new Promise((ok, fail) => {
+    const r = indexedDB.open(UDB_NAME, UDB_VER);
+    r.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(UDOC_STORE)) {
+        const s = d.createObjectStore(UDOC_STORE, {keyPath:'id'});
+        s.createIndex('userId','userId',{unique:false});
+      }
+    };
+    r.onsuccess = e => { udb = e.target.result; ok(); };
+    r.onerror   = fail;
+  });
+}
+function udbOp(mode, fn) {
+  return new Promise((ok,fail) => {
+    const tx = udb.transaction(UDOC_STORE, mode);
+    fn(tx.objectStore(UDOC_STORE), ok, fail);
+    tx.onerror = fail;
+  });
+}
+const udbAdd = doc  => udbOp('readwrite',(s,ok)=>{s.add(doc).onsuccess=ok;});
+const udbDel = id   => udbOp('readwrite',(s,ok)=>{s.delete(id).onsuccess=ok;});
+const udbGet = id   => udbOp('readonly', (s,ok)=>{s.get(id).onsuccess=e=>ok(e.target.result);});
+const udbByUser = uid => new Promise((ok,fail)=>{
+  const tx = udb.transaction(UDOC_STORE,'readonly');
+  tx.objectStore(UDOC_STORE).index('userId').getAll(uid).onsuccess = e => ok(e.target.result);
+  tx.onerror = fail;
+});
+
+// ── AUTH UI ───────────────────────────────────────────────
+function showAuthTab(tab) {
+  const isLogin = tab==='login';
+  document.getElementById('formLogin').style.display    = isLogin ? 'block':'none';
+  document.getElementById('formRegister').style.display = isLogin ? 'none':'block';
+  document.getElementById('btnToggleLogin').classList.toggle('active', isLogin);
+  document.getElementById('btnToggleRegister').classList.toggle('active', !isLogin);
+  document.getElementById('loginErr').classList.add('d-none');
+  document.getElementById('registerErr').classList.add('d-none');
+}
+function toggleVis(inputId, iconId) {
+  const i = document.getElementById(inputId);
+  const e = document.getElementById(iconId);
+  if(i.type==='password'){i.type='text';e.className='bi bi-eye-slash';}
+  else{i.type='password';e.className='bi bi-eye';}
+}
+
+// ── LOGIN ─────────────────────────────────────────────────
+async function doLogin() {
+  const email = document.getElementById('lEmail').value.trim().toLowerCase();
+  const pass  = document.getElementById('lPass').value;
+  const err   = document.getElementById('loginErr');
+  if (!email||!pass) { err.textContent='Completa todos los campos.'; err.classList.remove('d-none'); return; }
+  const hash  = await hashPwd(pass);
+  const users = getUsers();
+  const user  = users.find(u => u.email===email && u.passwordHash===hash);
+  if (!user) { err.textContent='Email o contraseña incorrectos.'; err.classList.remove('d-none'); return; }
+  err.classList.add('d-none');
+  currentUserId = user.id;
+  setSess(user.id);
+  startApp();
+}
+
+// ── REGISTER ──────────────────────────────────────────────
+async function doRegister() {
+  const name  = document.getElementById('rName').value.trim();
+  const email = document.getElementById('rEmail').value.trim().toLowerCase();
+  const phone = document.getElementById('rPhone').value.trim();
+  const pass  = document.getElementById('rPass').value;
+  const pass2 = document.getElementById('rPass2').value;
+  const err   = document.getElementById('registerErr');
+
+  if (!name||!email||!pass) { err.textContent='Nombre, email y contraseña son obligatorios.'; err.classList.remove('d-none'); return; }
+  if (pass.length < 6) { err.textContent='La contraseña debe tener al menos 6 caracteres.'; err.classList.remove('d-none'); return; }
+  if (pass!==pass2) { err.textContent='Las contraseñas no coinciden.'; err.classList.remove('d-none'); return; }
+  const users = getUsers();
+  if (users.some(u=>u.email===email)) { err.textContent='Ese email ya está registrado.'; err.classList.remove('d-none'); return; }
+
+  const hash = await hashPwd(pass);
+  const user = {
+    id: uid(), email, passwordHash: hash,
+    displayName: name, phone,
+    dni: '', passport: '',
+    bankAccounts: [], wallets: [],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  users.push(user);
+  saveUsers(users);
+  err.classList.add('d-none');
+  currentUserId = user.id;
+  setSess(user.id);
+  toast('¡Cuenta creada! Bienvenido/a.');
+  startApp();
+}
+
+// ── LOGOUT ────────────────────────────────────────────────
+function doLogout() {
+  clearSess(); currentUserId=null;
+  document.getElementById('appContainer').style.display = 'none';
+  document.getElementById('authScreen').style.display   = 'flex';
+  document.getElementById('lEmail').value='';
+  document.getElementById('lPass').value='';
+}
+
+// ── START APP ─────────────────────────────────────────────
+function startApp() {
+  const u = getMe();
+  if (!u) { doLogout(); return; }
+  document.getElementById('sidebarName').textContent  = u.displayName;
+  document.getElementById('sidebarEmail').textContent = u.email;
+  document.getElementById('authScreen').style.display   = 'none';
+  document.getElementById('appContainer').style.display = 'flex';
+  navigate('perfil');
+}
+
+// ── NAVIGATION ────────────────────────────────────────────
+function navigate(view) {
+  ['viewPerfil','viewDocs','viewExport'].forEach(v => document.getElementById(v).style.display='none');
+  ['navPerfil','navDocs','navExport'].forEach(n => document.getElementById(n).classList.remove('active'));
+  if (view==='perfil')   { document.getElementById('viewPerfil').style.display='block';  document.getElementById('navPerfil').classList.add('active'); loadPerfil(); }
+  if (view==='docs')     { document.getElementById('viewDocs').style.display='block';    document.getElementById('navDocs').classList.add('active');   loadDocs(); }
+  if (view==='export')   { document.getElementById('viewExport').style.display='block';  document.getElementById('navExport').classList.add('active'); }
+}
+
+// ── PERFIL ────────────────────────────────────────────────
+function loadPerfil() {
+  const u = getMe(); if(!u) return;
+  document.getElementById('pName').value    = u.displayName||'';
+  document.getElementById('pEmail').value   = u.email||'';
+  document.getElementById('pPhone').value   = u.phone||'';
+  document.getElementById('pDni').value     = u.dni||'';
+  document.getElementById('pPassport').value= u.passport||'';
+  renderBankList();
+  renderWalletList();
+}
+
+function savePerfil() {
+  const users = getUsers();
+  const idx = users.findIndex(u=>u.id===currentUserId);
+  if(idx<0) return;
+  users[idx].displayName = document.getElementById('pName').value.trim();
+  users[idx].phone       = document.getElementById('pPhone').value.trim();
+  users[idx].dni         = document.getElementById('pDni').value.trim();
+  users[idx].passport    = document.getElementById('pPassport').value.trim();
+  users[idx].updatedAt   = new Date().toISOString();
+  saveUsers(users);
+  document.getElementById('sidebarName').textContent = users[idx].displayName;
+  toast('Información guardada');
+}
+
+// Banks
+function renderBankList() {
+  const u = getMe(); if(!u) return;
+  const banks = u.bankAccounts||[];
+  const c = document.getElementById('bankList');
+  if(!banks.length) { c.innerHTML='<p class="text-muted small mb-0">Sin cuentas. Haz clic en "Añadir".</p>'; document.getElementById('bankSaveBtn').style.display='none'; return; }
+  document.getElementById('bankSaveBtn').style.display='block';
+  c.innerHTML = banks.map((b,i)=>`
+    <div class="row g-2 mb-2 align-items-center">
+      <div class="col-md-3"><input type="text" class="form-control form-control-sm" placeholder="Banco" value="${esc(b.bankName||'')}" onchange="updateBank(${i},'bankName',this.value)"></div>
+      <div class="col-md-4"><input type="text" class="form-control form-control-sm" placeholder="IBAN" value="${esc(b.iban||'')}" onchange="updateBank(${i},'iban',this.value)"></div>
+      <div class="col-md-3"><input type="text" class="form-control form-control-sm" placeholder="Nº cuenta" value="${esc(b.accountNumber||'')}" onchange="updateBank(${i},'accountNumber',this.value)"></div>
+      <div class="col-md-2"><button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeBank(${i})"><i class="bi bi-trash"></i></button></div>
+    </div>`).join('');
+}
+function addBank() {
+  const users=getUsers(); const idx=users.findIndex(u=>u.id===currentUserId); if(idx<0)return;
+  users[idx].bankAccounts = users[idx].bankAccounts||[];
+  users[idx].bankAccounts.push({id:uid(),bankName:'',iban:'',accountNumber:''});
+  saveUsers(users); renderBankList();
+}
+function updateBank(i,field,val) {
+  const users=getUsers(); const idx=users.findIndex(u=>u.id===currentUserId); if(idx<0)return;
+  if(users[idx].bankAccounts[i]) users[idx].bankAccounts[i][field]=val;
+  saveUsers(users);
+}
+function removeBank(i) {
+  const users=getUsers(); const idx=users.findIndex(u=>u.id===currentUserId); if(idx<0)return;
+  users[idx].bankAccounts.splice(i,1); saveUsers(users); renderBankList();
+}
+function saveBanks() { const users=getUsers(); const idx=users.findIndex(u=>u.id===currentUserId); if(idx<0)return; users[idx].updatedAt=new Date().toISOString(); saveUsers(users); toast('Cuentas guardadas'); }
+
+// Wallets
+function renderWalletList() {
+  const u=getMe(); if(!u)return;
+  const wals=u.wallets||[];
+  const c=document.getElementById('walletList');
+  if(!wals.length){c.innerHTML='<p class="text-muted small mb-0">Sin wallets. Haz clic en "Añadir".</p>';document.getElementById('walletSaveBtn').style.display='none';return;}
+  document.getElementById('walletSaveBtn').style.display='block';
+  c.innerHTML=wals.map((w,i)=>`
+    <div class="row g-2 mb-2 align-items-center">
+      <div class="col-md-2"><input type="text" class="form-control form-control-sm" placeholder="Red (ETH...)" value="${esc(w.network||'')}" onchange="updateWallet(${i},'network',this.value)"></div>
+      <div class="col-md-5"><input type="text" class="form-control form-control-sm" placeholder="Dirección" value="${esc(w.address||'')}" onchange="updateWallet(${i},'address',this.value)"></div>
+      <div class="col-md-3"><input type="text" class="form-control form-control-sm" placeholder="Etiqueta" value="${esc(w.label||'')}" onchange="updateWallet(${i},'label',this.value)"></div>
+      <div class="col-md-2"><button type="button" class="btn btn-outline-danger btn-sm w-100" onclick="removeWallet(${i})"><i class="bi bi-trash"></i></button></div>
+    </div>`).join('');
+}
+function addWallet() {
+  const users=getUsers();const idx=users.findIndex(u=>u.id===currentUserId);if(idx<0)return;
+  users[idx].wallets=users[idx].wallets||[];users[idx].wallets.push({id:uid(),network:'',address:'',label:''});
+  saveUsers(users);renderWalletList();
+}
+function updateWallet(i,field,val) {
+  const users=getUsers();const idx=users.findIndex(u=>u.id===currentUserId);if(idx<0)return;
+  if(users[idx].wallets[i])users[idx].wallets[i][field]=val;saveUsers(users);
+}
+function removeWallet(i) {
+  const users=getUsers();const idx=users.findIndex(u=>u.id===currentUserId);if(idx<0)return;
+  users[idx].wallets.splice(i,1);saveUsers(users);renderWalletList();
+}
+function saveWallets(){const users=getUsers();const idx=users.findIndex(u=>u.id===currentUserId);if(idx<0)return;users[idx].updatedAt=new Date().toISOString();saveUsers(users);toast('Wallets guardadas');}
+
+// Change password
+async function changePassword() {
+  const oldP=document.getElementById('cpOld').value;
+  const newP=document.getElementById('cpNew').value;
+  const newP2=document.getElementById('cpNew2').value;
+  if(!oldP||!newP||!newP2){toast('Completa todos los campos','error');return;}
+  if(newP.length<6){toast('La nueva contraseña debe tener al menos 6 caracteres','error');return;}
+  if(newP!==newP2){toast('Las contraseñas no coinciden','error');return;}
+  const oldHash=await hashPwd(oldP);
+  const users=getUsers();const idx=users.findIndex(u=>u.id===currentUserId);if(idx<0)return;
+  if(users[idx].passwordHash!==oldHash){toast('La contraseña actual es incorrecta','error');return;}
+  users[idx].passwordHash=await hashPwd(newP);users[idx].updatedAt=new Date().toISOString();
+  saveUsers(users);
+  document.getElementById('cpOld').value='';document.getElementById('cpNew').value='';document.getElementById('cpNew2').value='';
+  toast('Contraseña actualizada');
+}
+
+// ── DOCUMENTOS ────────────────────────────────────────────
+async function loadDocs() {
+  const docs=(await udbByUser(currentUserId)).sort((a,b)=>b.uploadedAt.localeCompare(a.uploadedAt));
+  document.getElementById('docCountText').textContent=`${docs.length} documento${docs.length!==1?'s':''}`;
+  const c=document.getElementById('myDocsList');
+  if(!docs.length){c.innerHTML=`<div class="empty-state"><i class="bi bi-folder2-open"></i><div>Aún no has subido documentos</div></div>`;return;}
+  c.innerHTML=docs.map(d=>{
+    const isPdf=d.mimeType==='application/pdf';
+    return `<div class="doc-item">
+      <i class="bi ${isPdf?'bi-file-earmark-pdf doc-icon pdf':'bi-file-earmark-image doc-icon img'}"></i>
+      <div class="doc-info">
+        <div class="doc-name">${esc(d.filename)}</div>
+        <div class="doc-meta">${d.category?`<span class="badge bg-light text-dark me-1">${esc(d.category)}</span>`:''}${esc(d.description||'')} · ${fmtSize(d.size)} · ${fmtDate(d.uploadedAt)}</div>
+      </div>
+      <div class="d-flex gap-1 flex-shrink-0">
+        <button class="btn btn-outline-primary btn-sm" onclick="downloadDoc('${d.id}')"><i class="bi bi-download"></i></button>
+        <button class="btn btn-outline-danger btn-sm" onclick="confirmDelDoc('${d.id}')"><i class="bi bi-trash"></i></button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function handleUpload() {
+  const fi=document.getElementById('uploadFile');
+  const cat=document.getElementById('uploadCat').value.trim();
+  const des=document.getElementById('uploadDesc').value.trim();
+  if(!fi.files.length){toast('Selecciona un archivo','error');return;}
+  const file=fi.files[0];
+  if(file.size>MAX_MB*1048576){toast(`El archivo supera ${MAX_MB} MB`,'error');return;}
+  const okTypes=['application/pdf','image/jpeg','image/png','image/gif','image/webp'];
+  if(!okTypes.includes(file.type)){toast('Formato no permitido','error');return;}
+  const reader=new FileReader();
+  reader.onload=async e=>{
+    try{
+      await udbAdd({id:uid(),userId:currentUserId,filename:file.name,mimeType:file.type,size:file.size,category:cat,description:des,uploadedAt:new Date().toISOString(),data:e.target.result});
+      bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
+      document.getElementById('uploadFile').value='';document.getElementById('uploadCat').value='';document.getElementById('uploadDesc').value='';
+      toast('Documento subido');loadDocs();
+    }catch{toast('Error al guardar','error');}
+  };
+  reader.readAsArrayBuffer(file);
+}
+async function downloadDoc(id) {
+  const d=await udbGet(id);if(!d){toast('No encontrado','error');return;}
+  const url=URL.createObjectURL(new Blob([d.data],{type:d.mimeType}));
+  Object.assign(document.createElement('a'),{href:url,download:d.filename}).click();
+  URL.revokeObjectURL(url);
+}
+function confirmDelDoc(id) {
+  showConfirm('¿Eliminar este documento?',async()=>{await udbDel(id);toast('Eliminado');loadDocs();});
+}
+
+// ── EXPORTAR ─────────────────────────────────────────────
+function exportJSON() {
+  const u=getMe();if(!u)return;
+  const {passwordHash:_,...safe}=u;
+  const blob=new Blob([JSON.stringify({user:safe,exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});
+  const url=URL.createObjectURL(blob);
+  Object.assign(document.createElement('a'),{href:url,download:`MiPerfil_${u.displayName.replace(/\s+/g,'_')}_${new Date().toISOString().slice(0,10)}.json`}).click();
+  URL.revokeObjectURL(url);toast('JSON exportado');
+}
+function exportExcel() {
+  if(!window.XLSX){toast('Librería no disponible (requiere internet)','error');return;}
+  const u=getMe();if(!u)return;
+  const wb=XLSX.utils.book_new();
+  const ws1=XLSX.utils.json_to_sheet([{
+    'Nombre':u.displayName,'Email':u.email,'Teléfono':u.phone||'',
+    'DNI':u.dni||'','Pasaporte':u.passport||'','Registrado':fmtDate(u.createdAt),
+  }]);
+  XLSX.utils.book_append_sheet(wb,ws1,'Mi Perfil');
+  if((u.bankAccounts||[]).length){
+    const ws2=XLSX.utils.json_to_sheet(u.bankAccounts.map(b=>({'Banco':b.bankName||'','IBAN':b.iban||'','Nº Cuenta':b.accountNumber||''})));
+    XLSX.utils.book_append_sheet(wb,ws2,'Mis Cuentas');
+  }
+  if((u.wallets||[]).length){
+    const ws3=XLSX.utils.json_to_sheet(u.wallets.map(w=>({'Red':w.network||'','Dirección':w.address||'','Etiqueta':w.label||''})));
+    XLSX.utils.book_append_sheet(wb,ws3,'Mis Wallets');
+  }
+  XLSX.writeFile(wb,`MiPerfil_${u.displayName.replace(/\s+/g,'_')}.xlsx`);toast('Excel exportado');
+}
+function exportPDF() {
+  if(!window.jspdf){toast('Librería no disponible (requiere internet)','error');return;}
+  const {jsPDF}=window.jspdf;
+  const u=getMe();if(!u)return;
+  const doc=new jsPDF();
+  doc.setFontSize(18);doc.setTextColor(8,145,178);doc.text('APP MIO — Mi Perfil',20,20);
+  doc.setFontSize(9);doc.setTextColor(100,100,100);doc.text(`Exportado: ${new Date().toLocaleString('es-ES')}`,20,30);
+  doc.autoTable({startY:40,head:[['Campo','Valor']],body:[
+    ['Nombre',u.displayName],['Email',u.email],['Teléfono',u.phone||'—'],
+    ['DNI',u.dni||'—'],['Pasaporte',u.passport||'—'],['Registrado',fmtDate(u.createdAt)],
+  ],headStyles:{fillColor:[8,145,178]},styles:{fontSize:9},margin:{left:20,right:20}});
+  if((u.bankAccounts||[]).length){
+    doc.autoTable({head:[['Banco','IBAN','Nº Cuenta']],
+      body:u.bankAccounts.map(b=>[b.bankName||'',b.iban||'',b.accountNumber||'']),
+      headStyles:{fillColor:[8,145,178]},styles:{fontSize:9},margin:{left:20,right:20}});
+  }
+  doc.save(`MiPerfil_${u.displayName.replace(/\s+/g,'_')}.pdf`);toast('PDF exportado');
+}
+
+// ── ENTER KEY SUPPORT ────────────────────────────────────
+document.getElementById('lPass').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+document.getElementById('lEmail').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+
+// ── INIT ──────────────────────────────────────────────────
+async function init() {
+  await initUDB();
+  const sess=getSess();
+  if(sess){
+    currentUserId=sess;
+    const u=getMe();
+    if(u){ startApp(); return; }
+    clearSess();
+  }
+}
+document.addEventListener('DOMContentLoaded', init);
+</script>
+</body>
+</html>
