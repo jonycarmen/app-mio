@@ -450,6 +450,24 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
   </div>
 </div>
 
+<!-- Documentos de usuario -->
+<div class="modal fade" id="userDocsModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-folder2-open me-2"></i>Documentos de <span id="userDocsName"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="userDocsBody" style="min-height:120px">
+        <div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div> Cargando...</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cerrar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="confirmModal" tabindex="-1">
   <div class="modal-dialog modal-sm">
     <div class="modal-content">
@@ -484,8 +502,10 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 
 // ── CONFIG ────────────────────────────────────────────────
 const DB_NAME = 'appMioDB', DB_VER = 1, STORE = 'documents', MAX_MB = 10;
+const UDB_NAME = 'appMioUserDB', UDOC_STORE = 'userDocs';
 
 let idb = null;
+let udb = null;
 let currentPersonId = null;
 let currentTab = 'docs';
 let confirmCb = null;
@@ -570,6 +590,38 @@ const dbDelByPerson = async pid => {
   docs.forEach(d => s.delete(d.id));
   return new Promise((ok,fail) => { tx.oncomplete=ok; tx.onerror=fail; });
 };
+
+// ── INDEXEDDB USUARIOS (solo lectura desde admin) ─────────
+function initUserDB() {
+  return new Promise((ok) => {
+    const r = indexedDB.open(UDB_NAME, 1);
+    r.onupgradeneeded = e => {
+      const d = e.target.result;
+      if (!d.objectStoreNames.contains(UDOC_STORE)) {
+        const s = d.createObjectStore(UDOC_STORE, {keyPath:'id'});
+        s.createIndex('userId','userId',{unique:false});
+      }
+    };
+    r.onsuccess = e => { udb = e.target.result; ok(); };
+    r.onerror   = () => ok(); // no bloquear si falla
+  });
+}
+function udbDocsByUser(userId) {
+  if (!udb) return Promise.resolve([]);
+  return new Promise((ok, fail) => {
+    const tx = udb.transaction(UDOC_STORE, 'readonly');
+    tx.objectStore(UDOC_STORE).index('userId').getAll(userId).onsuccess = e => ok(e.target.result);
+    tx.onerror = fail;
+  });
+}
+function udbGetDoc(id) {
+  if (!udb) return Promise.resolve(null);
+  return new Promise((ok, fail) => {
+    const tx = udb.transaction(UDOC_STORE, 'readonly');
+    tx.objectStore(UDOC_STORE).get(id).onsuccess = e => ok(e.target.result);
+    tx.onerror = fail;
+  });
+}
 
 // ── AUTH ──────────────────────────────────────────────────
 function login(user, pass) {
@@ -1047,6 +1099,9 @@ function loadUsuarios() {
       <td><small class="text-muted">${u.createdAt ? new Date(u.createdAt).toLocaleDateString('es-ES') : '—'}</small></td>
       <td>
         <div class="d-flex gap-1">
+          <button class="btn btn-primary btn-sm" title="Ver documentos" onclick="openUserDocs('${u.id}','${esc(u.displayName)}')">
+            <i class="bi bi-folder2-open"></i>
+          </button>
           <button class="btn btn-outline-primary btn-sm" title="Importar como persona" onclick="importUserAsPerson('${u.id}')">
             <i class="bi bi-person-plus"></i>
           </button>
@@ -1094,6 +1149,49 @@ function confirmDeleteUser(userId) {
   });
 }
 
+async function openUserDocs(userId, userName) {
+  document.getElementById('userDocsName').textContent = userName;
+  document.getElementById('userDocsBody').innerHTML =
+    '<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div> Cargando...</div>';
+  new bootstrap.Modal(document.getElementById('userDocsModal')).show();
+
+  const docs = await udbDocsByUser(userId);
+  const body = document.getElementById('userDocsBody');
+
+  if (!docs.length) {
+    body.innerHTML = `<div class="empty-state"><i class="bi bi-folder2-open"></i><div>Este usuario no ha subido documentos</div></div>`;
+    return;
+  }
+
+  docs.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+  body.innerHTML = docs.map(d => {
+    const isPdf = d.mimeType === 'application/pdf';
+    return `<div class="doc-item">
+      <i class="bi ${isPdf ? 'bi-file-earmark-pdf doc-icon pdf' : 'bi-file-earmark-image doc-icon img'}"></i>
+      <div class="doc-info">
+        <div class="doc-name">${esc(d.filename)}</div>
+        <div class="doc-meta">
+          ${d.category ? `<span class="badge bg-light text-dark me-1">${esc(d.category)}</span>` : ''}
+          ${esc(d.description || '')}
+          · ${fmtSize(d.size)}
+          · ${fmtDate(d.uploadedAt)}
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm flex-shrink-0" onclick="downloadUserDoc('${d.id}')">
+        <i class="bi bi-download me-1"></i>Descargar
+      </button>
+    </div>`;
+  }).join('');
+}
+
+async function downloadUserDoc(docId) {
+  const d = await udbGetDoc(docId);
+  if (!d) { toast('Documento no encontrado', 'error'); return; }
+  const url = URL.createObjectURL(new Blob([d.data], { type: d.mimeType }));
+  Object.assign(document.createElement('a'), { href: url, download: d.filename }).click();
+  URL.revokeObjectURL(url);
+}
+
 function importUserProfile(e) {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
@@ -1136,7 +1234,7 @@ document.getElementById('confirmBtn').addEventListener('click', () => {
 
 // ── INIT ──────────────────────────────────────────────────
 async function init() {
-  await initDB();
+  await Promise.all([initDB(), initUserDB()]);
   if (isLoggedIn()) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appContainer').style.display = 'flex';
