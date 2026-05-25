@@ -551,7 +551,7 @@ const FIREBASE_CFG = {
   storageBucket:     "app-mio-c25cb.firebasestorage.app",
   messagingSenderId: "264511243806",
   appId:             "1:264511243806:web:341b0e460aec9069d3500f",
-  databaseURL:       "https://app-mio-c25cb-default-rtdb.firebaseio.com"
+  databaseURL:       "https://app-mio-c25cb-default-rtdb.europe-west1.firebasedatabase.app"
 };
 let db = null;
 let _unsubUsers = null;
@@ -559,8 +559,8 @@ let _unsubUsers = null;
 // Detecta automáticamente la URL correcta del Realtime Database (US o Europa)
 async function detectDatabaseURL() {
   const candidates = [
-    "https://app-mio-c25cb-default-rtdb.firebaseio.com",
-    "https://app-mio-c25cb-default-rtdb.europe-west1.firebasedatabase.app"
+    "https://app-mio-c25cb-default-rtdb.europe-west1.firebasedatabase.app",
+    "https://app-mio-c25cb-default-rtdb.firebaseio.com"
   ];
   for (const url of candidates) {
     try {
