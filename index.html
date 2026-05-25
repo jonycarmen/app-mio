@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html><!-- v2026-05-26 EU-DB-FIX -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -354,7 +354,9 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
         <p class="section-title"><i class="bi bi-cloud-arrow-up me-2"></i>Nube y Copia de Seguridad</p>
         <div class="d-flex align-items-center gap-2 mb-3">
           <span class="text-muted small">Estado de conexión:</span>
-          <span id="backupCloudStatus" class="badge bg-secondary" style="font-size:.75rem">Comprobando...</span>
+          <span id="backupCloudStatus" class="badge bg-secondary" style="font-size:.75rem">
+            <span class="spinner-border spinner-border-sm me-1" style="width:.6rem;height:.6rem"></span>Conectando…
+          </span>
         </div>
         <p class="text-muted small mb-3">
           Guarda una copia completa de todas tus personas y nóminas en la nube Firebase.
@@ -393,28 +395,34 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 
     <!-- USUARIOS -->
     <div id="viewUsuarios" style="display:none">
-      <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+      <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
         <div>
           <h4 class="fw-bold mb-0">Usuarios registrados</h4>
           <p class="text-muted small mb-0">Personas que se registraron desde el portal de usuario</p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-primary btn-sm" onclick="loadUsuarios()">
+            <i class="bi bi-arrow-clockwise me-1"></i>Actualizar lista
+          </button>
           <button class="btn btn-success btn-sm" onclick="syncAllUsers()">
-            <i class="bi bi-arrow-repeat me-1"></i>Sincronizar todos
+            <i class="bi bi-arrow-repeat me-1"></i>Sincronizar → Panel
           </button>
           <button class="btn btn-warning btn-sm" onclick="diagnosticoFirebase()">
-            <i class="bi bi-bug me-1"></i>Diagnóstico nube
+            <i class="bi bi-bug me-1"></i>Diagnóstico
           </button>
-          <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('importUserFile').click()">
-            <i class="bi bi-upload me-1"></i>Importar perfil JSON
+          <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('importUserFile').click()">
+            <i class="bi bi-upload me-1"></i>Importar JSON
           </button>
           <input type="file" id="importUserFile" accept=".json" style="display:none" onchange="importUserProfile(event)">
-          <a href="usuario.html" target="_blank" class="btn btn-primary btn-sm">
-            <i class="bi bi-box-arrow-up-right me-1"></i>Abrir portal de usuario
+          <a href="usuario.html" target="_blank" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Abrir portal
           </a>
         </div>
-        <div id="diagResult" class="mt-3" style="display:none"></div>
       </div>
+      <!-- Estado Firebase -->
+      <div id="fbUserStatus" class="alert alert-secondary py-2 mb-3 small" style="display:none"></div>
+      <!-- Resultado diagnóstico -->
+      <div id="diagResult" class="mb-3" style="display:none"></div>
       <div class="people-table">
         <div id="usuariosContainer"></div>
       </div>
@@ -551,7 +559,7 @@ const FIREBASE_CFG = {
   storageBucket:     "app-mio-c25cb.firebasestorage.app",
   messagingSenderId: "264511243806",
   appId:             "1:264511243806:web:341b0e460aec9069d3500f",
-  databaseURL:       "https://app-mio-c25cb-default-rtdb.firebaseio.com"
+  databaseURL:       "https://app-mio-c25cb-default-rtdb.europe-west1.firebasedatabase.app"
 };
 let db = null;
 let _unsubUsers = null;
@@ -561,10 +569,28 @@ function initFirebase() {
     if (FIREBASE_CFG.apiKey === 'PEGAR_API_KEY') return;
     if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CFG);
     db = firebase.database();
+    // Monitorea la conexión real con el servidor
+    db.ref('.info/connected').on('value', snap => {
+      setCloudStatus(snap.val() === true);
+    });
     startUsersListener();
-    setCloudStatus(true);
-    console.log('✅ Firebase Realtime Database conectado');
-  } catch(e) { console.warn('Firebase no disponible:', e); setCloudStatus(false); }
+    console.log('🔄 Firebase iniciado, conectando...');
+  } catch(e) {
+    console.warn('Firebase no disponible:', e);
+    setCloudStatus(false);
+  }
+}
+
+// Espera hasta que db esté conectado (máx 6 s)
+function waitForDb() {
+  return new Promise(resolve => {
+    if (db) { resolve(true); return; }
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      if (db) { clearInterval(iv); resolve(true); }
+      else if (Date.now() - t0 > 6000) { clearInterval(iv); resolve(false); }
+    }, 200);
+  });
 }
 
 function setCloudStatus(online) {
@@ -579,8 +605,11 @@ function setCloudStatus(online) {
   }
   const el2 = document.getElementById('backupCloudStatus');
   if (el2) {
-    el2.textContent = online ? '🟢 Conectado' : '🔴 Sin conexión';
+    el2.innerHTML = online
+      ? '<i class="bi bi-cloud-check-fill me-1"></i>Conectado'
+      : '<i class="bi bi-cloud-slash me-1"></i>Sin conexión';
     el2.className = online ? 'badge text-bg-success' : 'badge text-bg-danger';
+    el2.style.fontSize = '.75rem';
   }
 }
 
@@ -589,6 +618,7 @@ function startUsersListener() {
   if (_unsubUsers) _unsubUsers();
   const ref = db.ref('usuarios');
   ref.on('value', snapshot => {
+    setCloudStatus(true); // confirmamos conexión real al recibir datos
     const usersObj = snapshot.val() || {};
     const cloudUsers = Object.values(usersObj);
     const local = JSON.parse(localStorage.getItem('amio_users') || '[]');
@@ -1136,9 +1166,14 @@ function exportPDF() {
 
 // ── CLOUD BACKUP ─────────────────────────────────────────
 async function cloudBackupNow() {
-  if (!db) { toast('Firebase no está conectado. Comprueba la configuración.', 'error'); return; }
   const btn = document.getElementById('btnCloudBackup');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Conectando...'; }
+  if (!await waitForDb()) {
+    toast('Firebase no disponible. Comprueba tu conexión a internet.', 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i>Guardar copia en la nube'; }
+    return;
+  }
+  if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...';
   try {
     await db.ref('backups/latest').set({
       people:   getPeople(),
@@ -1159,23 +1194,32 @@ async function cloudBackupNow() {
 }
 
 async function cloudRestore() {
-  if (!db) { toast('Firebase no está conectado', 'error'); return; }
+  if (!await waitForDb()) {
+    toast('Firebase no disponible. Comprueba tu conexión a internet.', 'error');
+    return;
+  }
   try {
     const snap = await db.ref('backups/latest').once('value');
-    if (!snap.exists()) { toast('No hay ninguna copia de seguridad en la nube todavía', 'error'); return; }
-    const data = snap.val();
+    if (!snap.exists()) {
+      toast('No hay ninguna copia de seguridad en la nube todavía. Guarda una primero.', 'error');
+      return;
+    }
+    const data  = snap.val();
     const fecha = data.savedAt ? new Date(data.savedAt).toLocaleString('es-ES') : 'desconocida';
+    const people   = toArray(data.people);
+    const payrolls = toArray(data.payrolls);
     showConfirm(
-      `¿Restaurar la copia del ${fecha}? Se reemplazarán los datos actuales.`,
+      `¿Restaurar la copia del ${fecha}?\n${people.length} persona(s) y ${payrolls.length} nómina(s). Se reemplazarán los datos actuales.`,
       () => {
-        if (data.people)   savePeople(Object.values(data.people));
-        if (data.payrolls) savePayrolls(Object.values(data.payrolls));
-        toast('✅ Datos restaurados desde la nube');
+        savePeople(people);
+        savePayrolls(payrolls);
+        toast(`✅ Restaurados: ${people.length} personas y ${payrolls.length} nóminas`);
         navigate('people');
       }
     );
   } catch(e) {
     toast('Error al restaurar: ' + (e.message || e), 'error');
+    console.error('cloudRestore error:', e);
   }
 }
 
@@ -1223,20 +1267,39 @@ function exportData() {
   Object.assign(document.createElement('a'),{href:url,download:`APP_MIO_datos_${new Date().toISOString().slice(0,10)}.json`}).click();
   URL.revokeObjectURL(url); toast('Datos exportados');
 }
+// Convierte array o objeto numerado de Firebase a array normal
+function toArray(val) {
+  if (!val) return [];
+  if (Array.isArray(val)) return val;
+  return Object.values(val);
+}
+
 function importData(e) {
   const file = e.target.files[0]; if(!file) return;
   const r = new FileReader();
   r.onload = ev => {
     try {
       const d = JSON.parse(ev.target.result);
-      if (!d.people||!d.payrolls) throw 0;
-      showConfirm('¿Importar datos? Esto reemplazará todos los datos actuales.',()=>{
-        savePeople(d.people); savePayrolls(d.payrolls);
-        toast('Datos importados'); navigate('people');
-      });
-    } catch { toast('Archivo JSON inválido','error'); }
+      // Aceptar si tiene al menos 'people' (payrolls puede estar vacío o ausente)
+      if (!d.people && !d.payrolls) throw new Error('El archivo no contiene datos de personas ni nóminas');
+      const people   = toArray(d.people);
+      const payrolls = toArray(d.payrolls);
+      showConfirm(
+        `¿Importar ${people.length} persona(s) y ${payrolls.length} nómina(s)? Se reemplazarán los datos actuales.`,
+        () => {
+          savePeople(people);
+          savePayrolls(payrolls);
+          toast(`✅ Importados: ${people.length} personas, ${payrolls.length} nóminas`);
+          navigate('people');
+        }
+      );
+    } catch(err) {
+      toast('Error al importar: ' + (err.message || 'Archivo JSON inválido'), 'error');
+      console.error('importData error:', err);
+    }
   };
-  r.readAsText(file); e.target.value='';
+  r.readAsText(file);
+  e.target.value = ''; // reset para poder reimportar el mismo archivo
 }
 function confirmClearData() {
   showConfirm('¿Borrar TODOS los datos? Esta acción es irreversible.',()=>{
@@ -1277,42 +1340,65 @@ function checkURLImport() {
 // ── DIAGNÓSTICO FIREBASE ──────────────────────────────────
 async function diagnosticoFirebase() {
   const box = document.getElementById('diagResult');
+  if (!box) { alert('Error: elemento diagResult no encontrado'); return; }
   box.style.display = 'block';
-  box.innerHTML = '<div class="alert alert-info py-2 mb-0"><div class="spinner-border spinner-border-sm me-2"></div>Comprobando Firebase...</div>';
+  box.innerHTML = '<div class="alert alert-info py-2 mb-0"><span class="spinner-border spinner-border-sm me-2"></span>Comprobando Firebase…</div>';
 
-  const lineas = [];
-  lineas.push(`🔌 Firebase SDK: ${typeof firebase !== 'undefined' ? '✅ cargado' : '❌ no disponible'}`);
-  lineas.push(`📦 db objeto: ${db ? '✅ inicializado' : '❌ null — posible URL incorrecta'}`);
+  const L = [];
+  L.push(`🔌 Firebase SDK: ${typeof firebase !== 'undefined' ? '✅ cargado' : '❌ NO cargado'}`);
+  L.push(`🌍 URL configurada: ${FIREBASE_CFG.databaseURL}`);
+  L.push(`📦 db inicializado: ${db ? '✅ sí' : '❌ no — Firebase no se inicializó'}`);
 
   if (db) {
     // Test escritura
     try {
-      await db.ref('_test_conexion').set({ ts: Date.now() });
-      lineas.push('✏️ Escritura en Firebase: ✅ OK');
+      await db.ref('_diag_test').set({ ts: Date.now() });
+      await db.ref('_diag_test').remove();
+      L.push('✏️ Escritura/lectura: ✅ OK');
     } catch(e) {
-      lineas.push(`✏️ Escritura en Firebase: ❌ ERROR — ${e.message}`);
+      L.push(`✏️ Escritura: ❌ ${e.code || e.message}`);
+      if (String(e.message).includes('permission')) L.push('   ↳ Revisa las Reglas de Realtime Database en Firebase Console');
     }
-    // Test lectura usuarios
+    // Lectura de usuarios
     try {
       const snap = await db.ref('usuarios').once('value');
-      const data = snap.val();
-      const count = data ? Object.keys(data).length : 0;
-      lineas.push(`👥 Usuarios en la nube: ${count === 0 ? '⚠️ 0 (vacío — los usuarios deben abrir su portal)' : `✅ ${count} usuario(s) encontrado(s)`}`);
-      if (count > 0) {
-        const nombres = Object.values(data).map(u => u.displayName || u.email || u.id).join(', ');
-        lineas.push(`   → ${nombres}`);
+      const val  = snap.val();
+      const cnt  = val ? Object.keys(val).length : 0;
+      if (cnt > 0) {
+        L.push(`👥 Usuarios en nube: ✅ ${cnt} encontrado(s)`);
+        Object.values(val).slice(0, 5).forEach(u =>
+          L.push(`   • ${u.displayName || u.email || u.id || '(sin nombre)'}`)
+        );
+      } else {
+        L.push('👥 Usuarios en nube: ⚠️ 0 — el usuario del portal aún no ha abierto su app');
       }
     } catch(e) {
-      lineas.push(`👥 Lectura usuarios: ❌ ERROR — ${e.message} (revisa las reglas de Realtime Database)`);
+      L.push(`👥 Lectura usuarios: ❌ ${e.code || e.message}`);
     }
-    // Limpiar test
-    try { await db.ref('_test_conexion').remove(); } catch(e) {}
+    // Copia de seguridad
+    try {
+      const snap2 = await db.ref('backups/latest').once('value');
+      if (snap2.exists()) {
+        const d = snap2.val();
+        const fecha = d.savedAt ? new Date(d.savedAt).toLocaleString('es-ES') : '?';
+        const np = d.people   ? Object.keys(d.people).length   : 0;
+        const nn = d.payrolls ? Object.keys(d.payrolls).length : 0;
+        L.push(`💾 Copia en nube: ✅ del ${fecha} (${np} personas, ${nn} nóminas)`);
+      } else {
+        L.push('💾 Copia en nube: ⚠️ ninguna todavía — pulsa "Guardar copia en la nube"');
+      }
+    } catch(e) {
+      L.push(`💾 Copia en nube: ❌ ${e.code || e.message}`);
+    }
   }
 
-  lineas.push(`💾 amio_users local: ${JSON.parse(localStorage.getItem('amio_users')||'[]').length} usuario(s)`);
+  L.push(`💻 Personas locales: ${getPeople().length}`);
+  L.push(`📋 Nóminas locales: ${getPayrolls().length}`);
+  L.push(`👤 Usuarios locales: ${JSON.parse(localStorage.getItem('amio_users')||'[]').length}`);
 
-  const ok = lineas.every(l => !l.includes('❌'));
-  box.innerHTML = `<div class="alert ${ok ? 'alert-success' : 'alert-warning'} py-2 mb-0" style="font-size:.85rem;white-space:pre-line">${lineas.join('\n')}</div>`;
+  const hasErr = L.some(l => l.includes('❌'));
+  const color  = hasErr ? 'warning' : L.some(l => l.includes('⚠️')) ? 'warning' : 'success';
+  box.innerHTML = `<div class="alert alert-${color} py-2 mb-0" style="font-size:.82rem;line-height:1.6;white-space:pre-line">${L.join('\n')}</div>`;
 }
 
 // ── SYNC MASIVO ────────────────────────────────────────────
@@ -1358,35 +1444,68 @@ async function syncAllUsers() {
 
 // ── USUARIOS ──────────────────────────────────────────────
 async function loadUsuarios() {
-  // Cargar desde Firebase primero (siempre que esté conectado)
+  const c       = document.getElementById('usuariosContainer');
+  const statusEl = document.getElementById('fbUserStatus');
+
+  // Spinner mientras carga
+  c.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><div class="mt-2 text-muted small">Cargando usuarios desde Firebase…</div></div>';
+  if (statusEl) statusEl.style.display = 'none';
+
+  let users = [];
+  let statusMsg = '';
+  let statusType = 'secondary';
+
   if (db) {
     try {
       const snap = await db.ref('usuarios').once('value');
-      const usersObj = snap.val() || {};
-      const cloudUsers = Object.values(usersObj);
-      if (cloudUsers.length > 0) {
+      const val  = snap.val();
+      if (val && typeof val === 'object') {
+        users = Object.values(val);
+        localStorage.setItem('amio_users', JSON.stringify(users));
+        statusMsg  = `✅ Firebase conectado — ${users.length} usuario(s) encontrado(s)`;
+        statusType = 'success';
+      } else {
+        // Firebase vacío — intentar local como fallback
         const local = JSON.parse(localStorage.getItem('amio_users') || '[]');
-        const merged = [...local];
-        for (const cu of cloudUsers) {
-          const idx = merged.findIndex(u => u.id === cu.id);
-          if (idx >= 0) Object.assign(merged[idx], cu);
-          else merged.push(cu);
+        if (local.length) {
+          users = local;
+          statusMsg  = `⚠️ Firebase vacío, mostrando ${local.length} usuario(s) del caché local. El usuario del portal debe abrirlo en su móvil para sincronizar.`;
+          statusType = 'warning';
+        } else {
+          statusMsg  = '⚠️ Firebase conectado pero sin datos. Pide al usuario que abra el portal (usuario.html) en su dispositivo.';
+          statusType = 'warning';
         }
-        localStorage.setItem('amio_users', JSON.stringify(merged));
       }
-    } catch(e) { /* usar datos locales si falla */ }
+    } catch(e) {
+      console.error('loadUsuarios Firebase error:', e);
+      users = JSON.parse(localStorage.getItem('amio_users') || '[]');
+      statusMsg  = `❌ Error Firebase: ${e.code || e.message}. Mostrando datos locales (${users.length}).`;
+      statusType = 'danger';
+    }
+  } else {
+    users = JSON.parse(localStorage.getItem('amio_users') || '[]');
+    statusMsg  = users.length
+      ? `⚠️ Firebase no conectado — mostrando ${users.length} usuario(s) del caché local.`
+      : '❌ Firebase no conectado. Comprueba tu conexión a internet y recarga la página.';
+    statusType = users.length ? 'warning' : 'danger';
   }
 
-  const users = JSON.parse(localStorage.getItem('amio_users') || '[]');
+  // Mostrar estado
+  if (statusEl) {
+    statusEl.className = `alert alert-${statusType} py-2 mb-3 small`;
+    statusEl.textContent = statusMsg;
+    statusEl.style.display = 'block';
+  }
+
   const badge = document.getElementById('userBadge');
   if (badge) badge.textContent = users.length || '';
 
-  const c = document.getElementById('usuariosContainer');
   if (!users.length) {
     c.innerHTML = `<div class="empty-state">
       <i class="bi bi-person-check"></i>
-      <div>Ningún usuario registrado todavía</div>
-      <div class="small mt-2">Comparte el link <strong>usuario.html</strong> para que se registren</div>
+      <div class="fw-semibold">Ningún usuario registrado todavía</div>
+      <div class="small mt-2 text-muted">Comparte el link del portal de usuario para que se registren.<br>
+      Una vez que abran el portal en su dispositivo, aparecerán aquí automáticamente.</div>
     </div>`;
     return;
   }
@@ -1540,7 +1659,7 @@ document.getElementById('confirmBtn').addEventListener('click', () => {
 // ── INIT ──────────────────────────────────────────────────
 async function init() {
   await Promise.all([initDB(), initUserDB()]);
-  initFirebase(); // ☁️ conectar Firebase y escuchar usuarios en tiempo real
+  initFirebase(); // ☁️ conectar Firebase (síncrono, no bloquea la UI)
   checkURLImport(); // procesa enlace WhatsApp si viene en la URL
   if (isLoggedIn()) {
     document.getElementById('loginScreen').style.display = 'none';
