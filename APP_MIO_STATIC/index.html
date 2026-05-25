@@ -156,6 +156,9 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
             <i class="bi bi-person-check"></i>Usuarios <span class="badge bg-secondary ms-1" id="userBadge" style="font-size:.7rem"></span>
           </a>
         </li>
+        <li class="nav-item px-2 mt-1">
+          <span id="cloudStatusBadge" style="display:none"></span>
+        </li>
         <li class="nav-item">
           <a href="#" class="nav-link" id="navSettings" onclick="navigate('settings');return false;">
             <i class="bi bi-gear"></i>Configuración
@@ -500,8 +503,65 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script>
 'use strict';
+
+// ── FIREBASE CONFIG ───────────────────────────────────────
+// 👇 Pega aquí los datos de tu proyecto Firebase (mismos que en usuario.html)
+const FIREBASE_CFG = {
+  apiKey:            "PEGAR_API_KEY",
+  authDomain:        "PEGAR_PROJECT_ID.firebaseapp.com",
+  projectId:         "PEGAR_PROJECT_ID",
+  storageBucket:     "PEGAR_PROJECT_ID.appspot.com",
+  messagingSenderId: "PEGAR_SENDER_ID",
+  appId:             "PEGAR_APP_ID"
+};
+let db = null;
+let _unsubUsers = null;
+
+function initFirebase() {
+  try {
+    if (FIREBASE_CFG.apiKey === 'PEGAR_API_KEY') return; // sin configurar aún
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CFG);
+    db = firebase.firestore();
+    startUsersListener();
+    setCloudStatus(true);
+    console.log('✅ Firebase conectado');
+  } catch(e) { console.warn('Firebase no disponible:', e); setCloudStatus(false); }
+}
+
+function setCloudStatus(online) {
+  const el = document.getElementById('cloudStatusBadge');
+  if (!el) return;
+  el.innerHTML = online
+    ? '<i class="bi bi-cloud-check-fill me-1"></i>En línea'
+    : '<i class="bi bi-cloud-slash me-1"></i>Sin nube';
+  el.style.cssText = online
+    ? 'display:inline-flex;align-items:center;background:#dcfce7;color:#166534;font-size:.72rem;padding:.2em .6em;border-radius:20px;font-weight:600'
+    : 'display:inline-flex;align-items:center;background:#fee2e2;color:#991b1b;font-size:.72rem;padding:.2em .6em;border-radius:20px;font-weight:600';
+}
+
+function startUsersListener() {
+  if (!db) return;
+  if (_unsubUsers) _unsubUsers();
+  _unsubUsers = db.collection('usuarios').onSnapshot(snapshot => {
+    const cloudUsers = snapshot.docs.map(d => d.data());
+    const local = JSON.parse(localStorage.getItem('amio_users') || '[]');
+    const merged = [...local];
+    for (const cu of cloudUsers) {
+      const idx = merged.findIndex(u => u.id === cu.id);
+      if (idx >= 0) Object.assign(merged[idx], cu);
+      else merged.push(cu);
+    }
+    localStorage.setItem('amio_users', JSON.stringify(merged));
+    const badge = document.getElementById('userBadge');
+    if (badge) badge.textContent = merged.length || '';
+    const v = document.getElementById('viewUsuarios');
+    if (v && v.style.display !== 'none') loadUsuarios();
+  }, err => { console.warn('Firestore error:', err); setCloudStatus(false); });
+}
 
 // ── CONFIG ────────────────────────────────────────────────
 const DB_NAME = 'appMioDB', DB_VER = 1, STORE = 'documents', MAX_MB = 10;
@@ -1102,7 +1162,23 @@ function checkURLImport() {
 }
 
 // ── SYNC MASIVO ────────────────────────────────────────────
-function syncAllUsers() {
+async function syncAllUsers() {
+  // Si Firebase está disponible, cargar desde la nube primero
+  if (db) {
+    try {
+      const snapshot = await db.collection('usuarios').get();
+      const cloudUsers = snapshot.docs.map(d => d.data());
+      const local = JSON.parse(localStorage.getItem('amio_users') || '[]');
+      const merged = [...local];
+      for (const cu of cloudUsers) {
+        const idx = merged.findIndex(u => u.id === cu.id);
+        if (idx >= 0) Object.assign(merged[idx], cu);
+        else merged.push(cu);
+      }
+      localStorage.setItem('amio_users', JSON.stringify(merged));
+    } catch(e) { console.warn('Error cargando desde la nube:', e); }
+  }
+
   const users = JSON.parse(localStorage.getItem('amio_users') || '[]');
   if (!users.length) { toast('No hay usuarios en el portal todavía', 'error'); return; }
   const people = getPeople();
@@ -1290,6 +1366,7 @@ document.getElementById('confirmBtn').addEventListener('click', () => {
 // ── INIT ──────────────────────────────────────────────────
 async function init() {
   await Promise.all([initDB(), initUserDB()]);
+  initFirebase(); // ☁️ conectar Firebase y escuchar usuarios en tiempo real
   checkURLImport(); // procesa enlace WhatsApp si viene en la URL
   if (isLoggedIn()) {
     document.getElementById('loginScreen').style.display = 'none';

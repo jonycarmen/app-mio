@@ -441,8 +441,42 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
 <script>
 'use strict';
+
+// ── FIREBASE CONFIG ───────────────────────────────────────
+// 👇 Pega aquí los datos de tu proyecto Firebase (ver instrucciones)
+const FIREBASE_CFG = {
+  apiKey:            "PEGAR_API_KEY",
+  authDomain:        "PEGAR_PROJECT_ID.firebaseapp.com",
+  projectId:         "PEGAR_PROJECT_ID",
+  storageBucket:     "PEGAR_PROJECT_ID.appspot.com",
+  messagingSenderId: "PEGAR_SENDER_ID",
+  appId:             "PEGAR_APP_ID"
+};
+let db = null;
+
+function initFirebase() {
+  try {
+    if (FIREBASE_CFG.apiKey === 'PEGAR_API_KEY') return; // sin configurar aún
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CFG);
+    db = firebase.firestore();
+    console.log('✅ Firebase conectado');
+  } catch(e) { console.warn('Firebase no disponible:', e); }
+}
+
+async function syncToCloud(user) {
+  if (!db) return;
+  try {
+    const {passwordHash:_, ...safe} = user;
+    await db.collection('usuarios').doc(user.id).set(
+      {...safe, updatedAt: new Date().toISOString()},
+      {merge: true}
+    );
+  } catch(e) { console.warn('Error al sincronizar con la nube:', e); }
+}
 
 // ── CONFIG ────────────────────────────────────────────────
 const UDB_NAME = 'appMioUserDB', UDB_VER = 1, UDOC_STORE = 'userDocs', MAX_MB = 10;
@@ -581,7 +615,8 @@ async function doRegister() {
   };
   users.push(user);
   saveUsers(users);
-  syncUserToPeople(user); // visible en admin panel al instante
+  syncUserToPeople(user); // visible en admin panel al instante (mismo dispositivo)
+  syncToCloud(user);      // ☁️ sincroniza a la nube para otros dispositivos
   err.classList.add('d-none');
   currentUserId = user.id;
   setSess(user.id);
@@ -663,6 +698,7 @@ function savePerfil() {
   users[idx].updatedAt   = new Date().toISOString();
   saveUsers(users);
   syncUserToPeople(users[idx]);
+  syncToCloud(users[idx]); // ☁️ actualiza en la nube
   document.getElementById('sidebarName').textContent = users[idx].displayName;
   toast('Información guardada');
 }
@@ -697,7 +733,7 @@ function removeBank(i) {
   const users=getUsers(); const idx=users.findIndex(u=>u.id===currentUserId); if(idx<0)return;
   users[idx].bankAccounts.splice(i,1); saveUsers(users); renderBankList();
 }
-function saveBanks() { const users=getUsers(); const idx=users.findIndex(u=>u.id===currentUserId); if(idx<0)return; users[idx].updatedAt=new Date().toISOString(); saveUsers(users); syncUserToPeople(users[idx]); toast('Cuentas guardadas'); }
+function saveBanks() { const users=getUsers(); const idx=users.findIndex(u=>u.id===currentUserId); if(idx<0)return; users[idx].updatedAt=new Date().toISOString(); saveUsers(users); syncUserToPeople(users[idx]); syncToCloud(users[idx]); toast('Cuentas guardadas'); }
 
 // Wallets
 function renderWalletList() {
@@ -727,7 +763,7 @@ function removeWallet(i) {
   const users=getUsers();const idx=users.findIndex(u=>u.id===currentUserId);if(idx<0)return;
   users[idx].wallets.splice(i,1);saveUsers(users);renderWalletList();
 }
-function saveWallets(){const users=getUsers();const idx=users.findIndex(u=>u.id===currentUserId);if(idx<0)return;users[idx].updatedAt=new Date().toISOString();saveUsers(users);syncUserToPeople(users[idx]);toast('Wallets guardadas');}
+function saveWallets(){const users=getUsers();const idx=users.findIndex(u=>u.id===currentUserId);if(idx<0)return;users[idx].updatedAt=new Date().toISOString();saveUsers(users);syncUserToPeople(users[idx]);syncToCloud(users[idx]);toast('Wallets guardadas');}
 
 // Change password
 async function changePassword() {
@@ -980,6 +1016,7 @@ document.getElementById('lEmail').addEventListener('keydown', e=>{ if(e.key==='E
 // ── INIT ──────────────────────────────────────────────────
 async function init() {
   await initUDB();
+  initFirebase(); // ☁️ conectar con la nube
   const sess=getSess();
   if(sess){
     currentUserId=sess;
