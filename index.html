@@ -534,7 +534,7 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.3/jspdf.plugin.autotable.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-database-compat.js"></script>
 <script>
 'use strict';
 
@@ -546,24 +546,24 @@ const FIREBASE_CFG = {
   projectId:         "app-mio-c25cb",
   storageBucket:     "app-mio-c25cb.firebasestorage.app",
   messagingSenderId: "264511243806",
-  appId:             "1:264511243806:web:341b0e460aec9069d3500f"
+  appId:             "1:264511243806:web:341b0e460aec9069d3500f",
+  databaseURL:       "https://app-mio-c25cb-default-rtdb.firebaseio.com"
 };
 let db = null;
 let _unsubUsers = null;
 
 function initFirebase() {
   try {
-    if (FIREBASE_CFG.apiKey === 'PEGAR_API_KEY') return; // sin configurar aún
+    if (FIREBASE_CFG.apiKey === 'PEGAR_API_KEY') return;
     if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CFG);
-    db = firebase.firestore();
+    db = firebase.database();
     startUsersListener();
     setCloudStatus(true);
-    console.log('✅ Firebase conectado');
+    console.log('✅ Firebase Realtime Database conectado');
   } catch(e) { console.warn('Firebase no disponible:', e); setCloudStatus(false); }
 }
 
 function setCloudStatus(online) {
-  // Badge en sidebar
   const el = document.getElementById('cloudStatusBadge');
   if (el) {
     el.innerHTML = online
@@ -573,7 +573,6 @@ function setCloudStatus(online) {
       ? 'display:inline-flex;align-items:center;background:#dcfce7;color:#166534;font-size:.72rem;padding:.2em .6em;border-radius:20px;font-weight:600'
       : 'display:inline-flex;align-items:center;background:#fee2e2;color:#991b1b;font-size:.72rem;padding:.2em .6em;border-radius:20px;font-weight:600';
   }
-  // Badge en configuración
   const el2 = document.getElementById('backupCloudStatus');
   if (el2) {
     el2.textContent = online ? '🟢 Conectado' : '🔴 Sin conexión';
@@ -584,8 +583,10 @@ function setCloudStatus(online) {
 function startUsersListener() {
   if (!db) return;
   if (_unsubUsers) _unsubUsers();
-  _unsubUsers = db.collection('usuarios').onSnapshot(snapshot => {
-    const cloudUsers = snapshot.docs.map(d => d.data());
+  const ref = db.ref('usuarios');
+  ref.on('value', snapshot => {
+    const usersObj = snapshot.val() || {};
+    const cloudUsers = Object.values(usersObj);
     const local = JSON.parse(localStorage.getItem('amio_users') || '[]');
     const merged = [...local];
     for (const cu of cloudUsers) {
@@ -598,7 +599,8 @@ function startUsersListener() {
     if (badge) badge.textContent = merged.length || '';
     const v = document.getElementById('viewUsuarios');
     if (v && v.style.display !== 'none') loadUsuarios();
-  }, err => { console.warn('Firestore error:', err); setCloudStatus(false); });
+  }, err => { console.warn('Firebase error:', err); setCloudStatus(false); });
+  _unsubUsers = () => ref.off();
 }
 
 // ── CONFIG ────────────────────────────────────────────────
@@ -1134,13 +1136,12 @@ async function cloudBackupNow() {
   const btn = document.getElementById('btnCloudBackup');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...'; }
   try {
-    const data = {
+    await db.ref('backups/latest').set({
       people:   getPeople(),
       payrolls: getPayrolls(),
       savedAt:  new Date().toISOString(),
       version:  1,
-    };
-    await db.collection('backups').doc('latest').set(data);
+    });
     const ts = new Date().toLocaleString('es-ES');
     localStorage.setItem('amio_last_backup', ts);
     const el = document.getElementById('lastBackupTime');
@@ -1156,15 +1157,15 @@ async function cloudBackupNow() {
 async function cloudRestore() {
   if (!db) { toast('Firebase no está conectado', 'error'); return; }
   try {
-    const snap = await db.collection('backups').doc('latest').get();
-    if (!snap.exists) { toast('No hay ninguna copia de seguridad en la nube todavía', 'error'); return; }
-    const data = snap.data();
+    const snap = await db.ref('backups/latest').once('value');
+    if (!snap.exists()) { toast('No hay ninguna copia de seguridad en la nube todavía', 'error'); return; }
+    const data = snap.val();
     const fecha = data.savedAt ? new Date(data.savedAt).toLocaleString('es-ES') : 'desconocida';
     showConfirm(
       `¿Restaurar la copia del ${fecha}? Se reemplazarán los datos actuales.`,
       () => {
-        if (data.people)   savePeople(data.people);
-        if (data.payrolls) savePayrolls(data.payrolls);
+        if (data.people)   savePeople(Object.values(data.people));
+        if (data.payrolls) savePayrolls(Object.values(data.payrolls));
         toast('✅ Datos restaurados desde la nube');
         navigate('people');
       }
@@ -1177,7 +1178,7 @@ async function cloudRestore() {
 async function autoBackupToCloud() {
   if (!db) return;
   try {
-    await db.collection('backups').doc('latest').set({
+    await db.ref('backups/latest').set({
       people:   getPeople(),
       payrolls: getPayrolls(),
       savedAt:  new Date().toISOString(),
@@ -1274,8 +1275,9 @@ async function syncAllUsers() {
   // Si Firebase está disponible, cargar desde la nube primero
   if (db) {
     try {
-      const snapshot = await db.collection('usuarios').get();
-      const cloudUsers = snapshot.docs.map(d => d.data());
+      const snap = await db.ref('usuarios').once('value');
+      const usersObj = snap.val() || {};
+      const cloudUsers = Object.values(usersObj);
       const local = JSON.parse(localStorage.getItem('amio_users') || '[]');
       const merged = [...local];
       for (const cu of cloudUsers) {
