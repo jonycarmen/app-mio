@@ -1312,7 +1312,26 @@ async function syncAllUsers() {
 }
 
 // ── USUARIOS ──────────────────────────────────────────────
-function loadUsuarios() {
+async function loadUsuarios() {
+  // Cargar desde Firebase primero (siempre que esté conectado)
+  if (db) {
+    try {
+      const snap = await db.ref('usuarios').once('value');
+      const usersObj = snap.val() || {};
+      const cloudUsers = Object.values(usersObj);
+      if (cloudUsers.length > 0) {
+        const local = JSON.parse(localStorage.getItem('amio_users') || '[]');
+        const merged = [...local];
+        for (const cu of cloudUsers) {
+          const idx = merged.findIndex(u => u.id === cu.id);
+          if (idx >= 0) Object.assign(merged[idx], cu);
+          else merged.push(cu);
+        }
+        localStorage.setItem('amio_users', JSON.stringify(merged));
+      }
+    } catch(e) { /* usar datos locales si falla */ }
+  }
+
   const users = JSON.parse(localStorage.getItem('amio_users') || '[]');
   const badge = document.getElementById('userBadge');
   if (badge) badge.textContent = users.length || '';
