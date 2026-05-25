@@ -164,6 +164,11 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
             <i class="bi bi-gear"></i>Configuración
           </a>
         </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" id="navBackup" onclick="navigate('settings');setTimeout(()=>document.getElementById('backupCloudStatus')?.scrollIntoView({behavior:'smooth'}),200);return false;">
+            <i class="bi bi-cloud-arrow-up"></i>Copia de seguridad
+          </a>
+        </li>
       </ul>
     </div>
     <div class="sidebar-footer">
@@ -343,9 +348,34 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
           </div>
         </form>
       </div>
+
+      <!-- NUBE / COPIA DE SEGURIDAD -->
+      <div class="form-card mb-4">
+        <p class="section-title"><i class="bi bi-cloud-arrow-up me-2"></i>Nube y Copia de Seguridad</p>
+        <div class="d-flex align-items-center gap-2 mb-3">
+          <span class="text-muted small">Estado de conexión:</span>
+          <span id="backupCloudStatus" class="badge bg-secondary" style="font-size:.75rem">Comprobando...</span>
+        </div>
+        <p class="text-muted small mb-3">
+          Guarda una copia completa de todas tus personas y nóminas en la nube Firebase.
+          Puedes restaurarla en cualquier dispositivo si pierdes los datos locales.
+        </p>
+        <div class="d-flex gap-2 flex-wrap mb-3">
+          <button class="btn btn-primary" onclick="cloudBackupNow()" id="btnCloudBackup">
+            <i class="bi bi-cloud-arrow-up me-1"></i>Guardar copia en la nube
+          </button>
+          <button class="btn btn-outline-info" onclick="cloudRestore()">
+            <i class="bi bi-cloud-arrow-down me-1"></i>Restaurar desde la nube
+          </button>
+        </div>
+        <p class="text-muted small mb-0">
+          <i class="bi bi-clock me-1"></i>Última copia: <strong id="lastBackupTime">—</strong>
+        </p>
+      </div>
+
       <div class="form-card">
-        <p class="section-title"><i class="bi bi-database me-2"></i>Datos</p>
-        <p class="text-muted small mb-3">Exporta tus datos para hacer backup o para usar con los scripts Python de exportación.</p>
+        <p class="section-title"><i class="bi bi-database me-2"></i>Datos locales</p>
+        <p class="text-muted small mb-3">Exporta o importa datos en formato JSON para backup local.</p>
         <div class="d-flex gap-2 flex-wrap">
           <button class="btn btn-outline-secondary" onclick="exportData()">
             <i class="bi bi-download me-1"></i>Exportar datos (JSON)
@@ -533,14 +563,22 @@ function initFirebase() {
 }
 
 function setCloudStatus(online) {
+  // Badge en sidebar
   const el = document.getElementById('cloudStatusBadge');
-  if (!el) return;
-  el.innerHTML = online
-    ? '<i class="bi bi-cloud-check-fill me-1"></i>En línea'
-    : '<i class="bi bi-cloud-slash me-1"></i>Sin nube';
-  el.style.cssText = online
-    ? 'display:inline-flex;align-items:center;background:#dcfce7;color:#166534;font-size:.72rem;padding:.2em .6em;border-radius:20px;font-weight:600'
-    : 'display:inline-flex;align-items:center;background:#fee2e2;color:#991b1b;font-size:.72rem;padding:.2em .6em;border-radius:20px;font-weight:600';
+  if (el) {
+    el.innerHTML = online
+      ? '<i class="bi bi-cloud-check-fill me-1"></i>En línea'
+      : '<i class="bi bi-cloud-slash me-1"></i>Sin nube';
+    el.style.cssText = online
+      ? 'display:inline-flex;align-items:center;background:#dcfce7;color:#166534;font-size:.72rem;padding:.2em .6em;border-radius:20px;font-weight:600'
+      : 'display:inline-flex;align-items:center;background:#fee2e2;color:#991b1b;font-size:.72rem;padding:.2em .6em;border-radius:20px;font-weight:600';
+  }
+  // Badge en configuración
+  const el2 = document.getElementById('backupCloudStatus');
+  if (el2) {
+    el2.textContent = online ? '🟢 Conectado' : '🔴 Sin conexión';
+    el2.className = online ? 'badge text-bg-success' : 'badge text-bg-danger';
+  }
 }
 
 function startUsersListener() {
@@ -862,6 +900,7 @@ document.getElementById('personForm').addEventListener('submit', e => {
     people.push(person);
   }
   savePeople(people);
+  autoBackupToCloud(); // ☁️ copia automática en la nube
   toast(id?'Persona actualizada':'Persona creada');
   navigate('personDetail', person.id);
 });
@@ -1009,6 +1048,7 @@ function handleAddPayroll() {
   const pay = getPayrolls();
   pay.push({id:uid(), personId:currentPersonId, amount:amt, effectiveDate:date, notes, createdAt:new Date().toISOString()});
   savePayrolls(pay);
+  autoBackupToCloud(); // ☁️ copia automática en la nube
   bootstrap.Modal.getInstance(document.getElementById('payrollModal')).hide();
   document.getElementById('payrollAmount').value='';
   document.getElementById('payrollNotes').value='';
@@ -1088,11 +1128,79 @@ function exportPDF() {
   toast('PDF exportado');
 }
 
+// ── CLOUD BACKUP ─────────────────────────────────────────
+async function cloudBackupNow() {
+  if (!db) { toast('Firebase no está conectado. Comprueba la configuración.', 'error'); return; }
+  const btn = document.getElementById('btnCloudBackup');
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...'; }
+  try {
+    const data = {
+      people:   getPeople(),
+      payrolls: getPayrolls(),
+      savedAt:  new Date().toISOString(),
+      version:  1,
+    };
+    await db.collection('backups').doc('latest').set(data);
+    const ts = new Date().toLocaleString('es-ES');
+    localStorage.setItem('amio_last_backup', ts);
+    const el = document.getElementById('lastBackupTime');
+    if (el) el.textContent = ts;
+    toast('✅ Copia de seguridad guardada en la nube');
+  } catch(e) {
+    toast('Error al guardar copia: ' + (e.message || e), 'error');
+  } finally {
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i>Guardar copia en la nube'; }
+  }
+}
+
+async function cloudRestore() {
+  if (!db) { toast('Firebase no está conectado', 'error'); return; }
+  try {
+    const snap = await db.collection('backups').doc('latest').get();
+    if (!snap.exists) { toast('No hay ninguna copia de seguridad en la nube todavía', 'error'); return; }
+    const data = snap.data();
+    const fecha = data.savedAt ? new Date(data.savedAt).toLocaleString('es-ES') : 'desconocida';
+    showConfirm(
+      `¿Restaurar la copia del ${fecha}? Se reemplazarán los datos actuales.`,
+      () => {
+        if (data.people)   savePeople(data.people);
+        if (data.payrolls) savePayrolls(data.payrolls);
+        toast('✅ Datos restaurados desde la nube');
+        navigate('people');
+      }
+    );
+  } catch(e) {
+    toast('Error al restaurar: ' + (e.message || e), 'error');
+  }
+}
+
+async function autoBackupToCloud() {
+  if (!db) return;
+  try {
+    await db.collection('backups').doc('latest').set({
+      people:   getPeople(),
+      payrolls: getPayrolls(),
+      savedAt:  new Date().toISOString(),
+      version:  1,
+    });
+    const ts = new Date().toLocaleString('es-ES');
+    localStorage.setItem('amio_last_backup', ts);
+    const el = document.getElementById('lastBackupTime');
+    if (el) el.textContent = ts;
+  } catch(e) { /* silencioso */ }
+}
+
 // ── SETTINGS ─────────────────────────────────────────────
 function loadSettings() {
   document.getElementById('sUser').value = getCfg().adminUser;
   document.getElementById('sPass').value = '';
   document.getElementById('sPass2').value = '';
+  // Última copia
+  const ts = localStorage.getItem('amio_last_backup');
+  const el = document.getElementById('lastBackupTime');
+  if (el) el.textContent = ts || '—';
+  // Estado Firebase
+  setCloudStatus(!!db);
 }
 document.getElementById('settingsForm').addEventListener('submit', e => {
   e.preventDefault();
