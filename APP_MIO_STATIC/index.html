@@ -556,14 +556,33 @@ const FIREBASE_CFG = {
 let db = null;
 let _unsubUsers = null;
 
-function initFirebase() {
+// Detecta automáticamente la URL correcta del Realtime Database (US o Europa)
+async function detectDatabaseURL() {
+  const candidates = [
+    "https://app-mio-c25cb-default-rtdb.firebaseio.com",
+    "https://app-mio-c25cb-default-rtdb.europe-west1.firebasedatabase.app"
+  ];
+  for (const url of candidates) {
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 4000);
+      const r = await fetch(url + '/.json', { signal: ctrl.signal });
+      clearTimeout(tid);
+      if (r.status !== 404) { console.log('🔍 Firebase DB URL activa:', url); return url; }
+    } catch(e) { /* probar siguiente URL */ }
+  }
+  return candidates[0]; // fallback
+}
+
+async function initFirebase() {
   try {
     if (FIREBASE_CFG.apiKey === 'PEGAR_API_KEY') return;
-    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CFG);
+    const dbURL = await detectDatabaseURL();
+    if (!firebase.apps.length) firebase.initializeApp({...FIREBASE_CFG, databaseURL: dbURL});
     db = firebase.database();
     startUsersListener();
     setCloudStatus(true);
-    console.log('✅ Firebase Realtime Database conectado');
+    console.log('✅ Firebase conectado:', dbURL);
   } catch(e) { console.warn('Firebase no disponible:', e); setCloudStatus(false); }
 }
 
@@ -1284,6 +1303,26 @@ async function diagnosticoFirebase() {
   lineas.push(`🔌 Firebase SDK: ${typeof firebase !== 'undefined' ? '✅ cargado' : '❌ no disponible'}`);
   lineas.push(`📦 db objeto: ${db ? '✅ inicializado' : '❌ null — posible URL incorrecta'}`);
 
+  // Probar ambas URLs vía REST para saber cuál existe
+  const urlsTest = [
+    "https://app-mio-c25cb-default-rtdb.firebaseio.com",
+    "https://app-mio-c25cb-default-rtdb.europe-west1.firebasedatabase.app"
+  ];
+  for (const url of urlsTest) {
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 5000);
+      const r = await fetch(url + '/.json', { signal: ctrl.signal });
+      clearTimeout(tid);
+      const label = url.includes('europe') ? '🇪🇺 Europa' : '🇺🇸 EE.UU.';
+      if (r.status === 404) lineas.push(`${label}: ❌ Base de datos no encontrada en esta región`);
+      else lineas.push(`${label}: ✅ Base de datos ACTIVA (estado ${r.status}) — URL correcta`);
+    } catch(e) {
+      const label = url.includes('europe') ? '🇪🇺 Europa' : '🇺🇸 EE.UU.';
+      lineas.push(`${label}: ⚠️ Sin respuesta (red o CORS)`);
+    }
+  }
+
   if (db) {
     // Test escritura
     try {
@@ -1540,7 +1579,7 @@ document.getElementById('confirmBtn').addEventListener('click', () => {
 // ── INIT ──────────────────────────────────────────────────
 async function init() {
   await Promise.all([initDB(), initUserDB()]);
-  initFirebase(); // ☁️ conectar Firebase y escuchar usuarios en tiempo real
+  await initFirebase(); // ☁️ conectar Firebase y escuchar usuarios en tiempo real
   checkURLImport(); // procesa enlace WhatsApp si viene en la URL
   if (isLoggedIn()) {
     document.getElementById('loginScreen').style.display = 'none';

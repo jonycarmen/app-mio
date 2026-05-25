@@ -200,6 +200,14 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
       </ul>
     </div>
     <div class="sidebar-footer">
+      <!-- Estado de sincronización con la nube -->
+      <div id="cloudSyncStatus" style="display:flex;align-items:center;gap:.4rem;padding:.45rem .9rem;font-size:.75rem;color:rgba(255,255,255,.5);margin-bottom:.25rem;">
+        <i class="bi bi-cloud" id="cloudSyncIcon"></i>
+        <span id="cloudSyncText">Nube: conectando…</span>
+      </div>
+      <a class="nav-link" style="color:rgba(150,220,255,.8);font-size:.85rem;" onclick="pushLocalUsersToCloud()" title="Subir mis datos a la nube ahora">
+        <i class="bi bi-cloud-upload"></i>Sincronizar nube
+      </a>
       <a class="nav-link" style="color:rgba(255,100,100,.8)" onclick="doLogout()">
         <i class="bi bi-box-arrow-right"></i>Cerrar sesión
       </a>
@@ -459,13 +467,43 @@ const FIREBASE_CFG = {
 };
 let db = null;
 
-function initFirebase() {
+// Detecta automáticamente la URL correcta del Realtime Database (US o Europa)
+async function detectDatabaseURL() {
+  const candidates = [
+    "https://app-mio-c25cb-default-rtdb.firebaseio.com",
+    "https://app-mio-c25cb-default-rtdb.europe-west1.firebasedatabase.app"
+  ];
+  for (const url of candidates) {
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 4000);
+      const r = await fetch(url + '/.json', { signal: ctrl.signal });
+      clearTimeout(tid);
+      if (r.status !== 404) { console.log('🔍 Firebase DB URL activa:', url); return url; }
+    } catch(e) { /* probar siguiente */ }
+  }
+  return candidates[0];
+}
+
+async function initFirebase() {
   try {
     if (FIREBASE_CFG.apiKey === 'PEGAR_API_KEY') return;
-    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CFG);
+    const dbURL = await detectDatabaseURL();
+    if (!firebase.apps.length) firebase.initializeApp({...FIREBASE_CFG, databaseURL: dbURL});
     db = firebase.database();
-    console.log('✅ Firebase Realtime Database conectado');
-  } catch(e) { console.warn('Firebase no disponible:', e); }
+    console.log('✅ Firebase conectado:', dbURL);
+    // Actualizar indicador visual
+    const icon = document.getElementById('cloudSyncIcon');
+    const text = document.getElementById('cloudSyncText');
+    if (icon) { icon.className = 'bi bi-cloud-check-fill'; icon.style.color = '#6ee7b7'; }
+    if (text) { text.textContent = 'Nube: conectado'; text.style.color = '#6ee7b7'; }
+  } catch(e) {
+    console.warn('Firebase no disponible:', e);
+    const icon = document.getElementById('cloudSyncIcon');
+    const text = document.getElementById('cloudSyncText');
+    if (icon) { icon.className = 'bi bi-cloud-slash'; icon.style.color = '#fca5a5'; }
+    if (text) { text.textContent = 'Nube: sin conexión'; text.style.color = '#fca5a5'; }
+  }
 }
 
 async function syncToCloud(user) {
@@ -1018,15 +1056,24 @@ async function pushLocalUsersToCloud() {
   if (!db) return;
   const users = getUsers();
   if (!users.length) return;
+  let ok = 0, fail = 0;
   for (const user of users) {
-    try { await syncToCloud(user); } catch(e) { /* silencioso */ }
+    try { await syncToCloud(user); ok++; }
+    catch(e) { fail++; console.warn('Error sync usuario:', user.id, e.message); }
   }
-  console.log(`☁️ ${users.length} usuario(s) sincronizados con la nube`);
+  if (ok > 0) {
+    console.log(`☁️ ${ok} usuario(s) sincronizados con la nube`);
+    toast(`☁️ ${ok} perfil${ok > 1 ? 'es' : ''} sincronizado${ok > 1 ? 's' : ''} en la nube`);
+  }
+  if (fail > 0) {
+    console.warn(`❌ ${fail} usuario(s) no pudieron sincronizarse`);
+    toast(`⚠️ ${fail} perfil${fail > 1 ? 'es' : ''} no pudieron subirse a la nube`, 'error');
+  }
 }
 
 async function init() {
   await initUDB();
-  initFirebase(); // ☁️ conectar con la nube
+  await initFirebase(); // ☁️ conectar con la nube (espera a detectar URL correcta)
   // Subir todos los usuarios locales a Firebase (por si registraron antes de la nube)
   if (db) pushLocalUsersToCloud();
   const sess=getSess();
