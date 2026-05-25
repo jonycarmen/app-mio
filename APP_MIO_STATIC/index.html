@@ -559,34 +559,33 @@ const FIREBASE_CFG = {
 let db = null;
 let _unsubUsers = null;
 
-// Detecta automáticamente la URL correcta del Realtime Database (US o Europa)
-async function detectDatabaseURL() {
-  const candidates = [
-    "https://app-mio-c25cb-default-rtdb.europe-west1.firebasedatabase.app",
-    "https://app-mio-c25cb-default-rtdb.firebaseio.com"
-  ];
-  for (const url of candidates) {
-    try {
-      const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 4000);
-      const r = await fetch(url + '/.json', { signal: ctrl.signal });
-      clearTimeout(tid);
-      if (r.status !== 404) { console.log('🔍 Firebase DB URL activa:', url); return url; }
-    } catch(e) { /* probar siguiente URL */ }
-  }
-  return candidates[0]; // fallback
-}
-
-async function initFirebase() {
+function initFirebase() {
   try {
     if (FIREBASE_CFG.apiKey === 'PEGAR_API_KEY') return;
-    const dbURL = await detectDatabaseURL();
-    if (!firebase.apps.length) firebase.initializeApp({...FIREBASE_CFG, databaseURL: dbURL});
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CFG);
     db = firebase.database();
+    // Monitorea la conexión real con el servidor
+    db.ref('.info/connected').on('value', snap => {
+      setCloudStatus(snap.val() === true);
+    });
     startUsersListener();
-    setCloudStatus(true);
-    console.log('✅ Firebase conectado:', dbURL);
-  } catch(e) { console.warn('Firebase no disponible:', e); setCloudStatus(false); }
+    console.log('🔄 Firebase iniciado, conectando...');
+  } catch(e) {
+    console.warn('Firebase no disponible:', e);
+    setCloudStatus(false);
+  }
+}
+
+// Espera hasta que db esté conectado (máx 6 s)
+function waitForDb() {
+  return new Promise(resolve => {
+    if (db) { resolve(true); return; }
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      if (db) { clearInterval(iv); resolve(true); }
+      else if (Date.now() - t0 > 6000) { clearInterval(iv); resolve(false); }
+    }, 200);
+  });
 }
 
 function setCloudStatus(online) {
@@ -1162,9 +1161,14 @@ function exportPDF() {
 
 // ── CLOUD BACKUP ─────────────────────────────────────────
 async function cloudBackupNow() {
-  if (!db) { toast('Firebase no está conectado. Comprueba la configuración.', 'error'); return; }
   const btn = document.getElementById('btnCloudBackup');
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Conectando...'; }
+  if (!await waitForDb()) {
+    toast('Firebase no disponible. Comprueba tu conexión a internet.', 'error');
+    if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i>Guardar copia en la nube'; }
+    return;
+  }
+  if (btn) btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Guardando...';
   try {
     await db.ref('backups/latest').set({
       people:   getPeople(),
@@ -1185,8 +1189,8 @@ async function cloudBackupNow() {
 }
 
 async function cloudRestore() {
-  if (!db) {
-    toast('Firebase todavía no está conectado. Espera unos segundos y vuelve a intentarlo.', 'error');
+  if (!await waitForDb()) {
+    toast('Firebase no disponible. Comprueba tu conexión a internet.', 'error');
     return;
   }
   try {
@@ -1331,62 +1335,65 @@ function checkURLImport() {
 // ── DIAGNÓSTICO FIREBASE ──────────────────────────────────
 async function diagnosticoFirebase() {
   const box = document.getElementById('diagResult');
+  if (!box) { alert('Error: elemento diagResult no encontrado'); return; }
   box.style.display = 'block';
-  box.innerHTML = '<div class="alert alert-info py-2 mb-0"><div class="spinner-border spinner-border-sm me-2"></div>Comprobando Firebase...</div>';
+  box.innerHTML = '<div class="alert alert-info py-2 mb-0"><span class="spinner-border spinner-border-sm me-2"></span>Comprobando Firebase…</div>';
 
-  const lineas = [];
-  lineas.push(`🔌 Firebase SDK: ${typeof firebase !== 'undefined' ? '✅ cargado' : '❌ no disponible'}`);
-  lineas.push(`📦 db objeto: ${db ? '✅ inicializado' : '❌ null — posible URL incorrecta'}`);
-
-  // Probar ambas URLs vía REST para saber cuál existe
-  const urlsTest = [
-    "https://app-mio-c25cb-default-rtdb.firebaseio.com",
-    "https://app-mio-c25cb-default-rtdb.europe-west1.firebasedatabase.app"
-  ];
-  for (const url of urlsTest) {
-    try {
-      const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 5000);
-      const r = await fetch(url + '/.json', { signal: ctrl.signal });
-      clearTimeout(tid);
-      const label = url.includes('europe') ? '🇪🇺 Europa' : '🇺🇸 EE.UU.';
-      if (r.status === 404) lineas.push(`${label}: ❌ Base de datos no encontrada en esta región`);
-      else lineas.push(`${label}: ✅ Base de datos ACTIVA (estado ${r.status}) — URL correcta`);
-    } catch(e) {
-      const label = url.includes('europe') ? '🇪🇺 Europa' : '🇺🇸 EE.UU.';
-      lineas.push(`${label}: ⚠️ Sin respuesta (red o CORS)`);
-    }
-  }
+  const L = [];
+  L.push(`🔌 Firebase SDK: ${typeof firebase !== 'undefined' ? '✅ cargado' : '❌ NO cargado'}`);
+  L.push(`🌍 URL configurada: ${FIREBASE_CFG.databaseURL}`);
+  L.push(`📦 db inicializado: ${db ? '✅ sí' : '❌ no — Firebase no se inicializó'}`);
 
   if (db) {
     // Test escritura
     try {
-      await db.ref('_test_conexion').set({ ts: Date.now() });
-      lineas.push('✏️ Escritura en Firebase: ✅ OK');
+      await db.ref('_diag_test').set({ ts: Date.now() });
+      await db.ref('_diag_test').remove();
+      L.push('✏️ Escritura/lectura: ✅ OK');
     } catch(e) {
-      lineas.push(`✏️ Escritura en Firebase: ❌ ERROR — ${e.message}`);
+      L.push(`✏️ Escritura: ❌ ${e.code || e.message}`);
+      if (String(e.message).includes('permission')) L.push('   ↳ Revisa las Reglas de Realtime Database en Firebase Console');
     }
-    // Test lectura usuarios
+    // Lectura de usuarios
     try {
       const snap = await db.ref('usuarios').once('value');
-      const data = snap.val();
-      const count = data ? Object.keys(data).length : 0;
-      lineas.push(`👥 Usuarios en la nube: ${count === 0 ? '⚠️ 0 (vacío — los usuarios deben abrir su portal)' : `✅ ${count} usuario(s) encontrado(s)`}`);
-      if (count > 0) {
-        const nombres = Object.values(data).map(u => u.displayName || u.email || u.id).join(', ');
-        lineas.push(`   → ${nombres}`);
+      const val  = snap.val();
+      const cnt  = val ? Object.keys(val).length : 0;
+      if (cnt > 0) {
+        L.push(`👥 Usuarios en nube: ✅ ${cnt} encontrado(s)`);
+        Object.values(val).slice(0, 5).forEach(u =>
+          L.push(`   • ${u.displayName || u.email || u.id || '(sin nombre)'}`)
+        );
+      } else {
+        L.push('👥 Usuarios en nube: ⚠️ 0 — el usuario del portal aún no ha abierto su app');
       }
     } catch(e) {
-      lineas.push(`👥 Lectura usuarios: ❌ ERROR — ${e.message} (revisa las reglas de Realtime Database)`);
+      L.push(`👥 Lectura usuarios: ❌ ${e.code || e.message}`);
     }
-    // Limpiar test
-    try { await db.ref('_test_conexion').remove(); } catch(e) {}
+    // Copia de seguridad
+    try {
+      const snap2 = await db.ref('backups/latest').once('value');
+      if (snap2.exists()) {
+        const d = snap2.val();
+        const fecha = d.savedAt ? new Date(d.savedAt).toLocaleString('es-ES') : '?';
+        const np = d.people   ? Object.keys(d.people).length   : 0;
+        const nn = d.payrolls ? Object.keys(d.payrolls).length : 0;
+        L.push(`💾 Copia en nube: ✅ del ${fecha} (${np} personas, ${nn} nóminas)`);
+      } else {
+        L.push('💾 Copia en nube: ⚠️ ninguna todavía — pulsa "Guardar copia en la nube"');
+      }
+    } catch(e) {
+      L.push(`💾 Copia en nube: ❌ ${e.code || e.message}`);
+    }
   }
 
-  lineas.push(`💾 amio_users local: ${JSON.parse(localStorage.getItem('amio_users')||'[]').length} usuario(s)`);
+  L.push(`💻 Personas locales: ${getPeople().length}`);
+  L.push(`📋 Nóminas locales: ${getPayrolls().length}`);
+  L.push(`👤 Usuarios locales: ${JSON.parse(localStorage.getItem('amio_users')||'[]').length}`);
 
-  const ok = lineas.every(l => !l.includes('❌'));
-  box.innerHTML = `<div class="alert ${ok ? 'alert-success' : 'alert-warning'} py-2 mb-0" style="font-size:.85rem;white-space:pre-line">${lineas.join('\n')}</div>`;
+  const hasErr = L.some(l => l.includes('❌'));
+  const color  = hasErr ? 'warning' : L.some(l => l.includes('⚠️')) ? 'warning' : 'success';
+  box.innerHTML = `<div class="alert alert-${color} py-2 mb-0" style="font-size:.82rem;line-height:1.6;white-space:pre-line">${L.join('\n')}</div>`;
 }
 
 // ── SYNC MASIVO ────────────────────────────────────────────
@@ -1614,7 +1621,7 @@ document.getElementById('confirmBtn').addEventListener('click', () => {
 // ── INIT ──────────────────────────────────────────────────
 async function init() {
   await Promise.all([initDB(), initUserDB()]);
-  await initFirebase(); // ☁️ conectar Firebase y escuchar usuarios en tiempo real
+  initFirebase(); // ☁️ conectar Firebase (síncrono, no bloquea la UI)
   checkURLImport(); // procesa enlace WhatsApp si viene en la URL
   if (isLoggedIn()) {
     document.getElementById('loginScreen').style.display = 'none';

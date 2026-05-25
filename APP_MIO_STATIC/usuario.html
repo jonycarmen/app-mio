@@ -467,42 +467,24 @@ const FIREBASE_CFG = {
 };
 let db = null;
 
-// Detecta automáticamente la URL correcta del Realtime Database (US o Europa)
-async function detectDatabaseURL() {
-  const candidates = [
-    "https://app-mio-c25cb-default-rtdb.europe-west1.firebasedatabase.app",
-    "https://app-mio-c25cb-default-rtdb.firebaseio.com"
-  ];
-  for (const url of candidates) {
-    try {
-      const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 4000);
-      const r = await fetch(url + '/.json', { signal: ctrl.signal });
-      clearTimeout(tid);
-      if (r.status !== 404) { console.log('🔍 Firebase DB URL activa:', url); return url; }
-    } catch(e) { /* probar siguiente */ }
-  }
-  return candidates[0];
+function setPortalCloudStatus(online) {
+  const icon = document.getElementById('cloudSyncIcon');
+  const text = document.getElementById('cloudSyncText');
+  if (icon) { icon.className = online ? 'bi bi-cloud-check-fill' : 'bi bi-cloud-slash'; icon.style.color = online ? '#6ee7b7' : '#fca5a5'; }
+  if (text) { text.textContent = online ? 'Nube: conectado' : 'Nube: sin conexión'; text.style.color = online ? '#6ee7b7' : '#fca5a5'; }
 }
 
-async function initFirebase() {
+function initFirebase() {
   try {
     if (FIREBASE_CFG.apiKey === 'PEGAR_API_KEY') return;
-    const dbURL = await detectDatabaseURL();
-    if (!firebase.apps.length) firebase.initializeApp({...FIREBASE_CFG, databaseURL: dbURL});
+    if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CFG);
     db = firebase.database();
-    console.log('✅ Firebase conectado:', dbURL);
-    // Actualizar indicador visual
-    const icon = document.getElementById('cloudSyncIcon');
-    const text = document.getElementById('cloudSyncText');
-    if (icon) { icon.className = 'bi bi-cloud-check-fill'; icon.style.color = '#6ee7b7'; }
-    if (text) { text.textContent = 'Nube: conectado'; text.style.color = '#6ee7b7'; }
+    // Monitorea conexión real
+    db.ref('.info/connected').on('value', snap => setPortalCloudStatus(snap.val() === true));
+    console.log('🔄 Firebase portal iniciado, conectando...');
   } catch(e) {
     console.warn('Firebase no disponible:', e);
-    const icon = document.getElementById('cloudSyncIcon');
-    const text = document.getElementById('cloudSyncText');
-    if (icon) { icon.className = 'bi bi-cloud-slash'; icon.style.color = '#fca5a5'; }
-    if (text) { text.textContent = 'Nube: sin conexión'; text.style.color = '#fca5a5'; }
+    setPortalCloudStatus(false);
   }
 }
 
@@ -1073,7 +1055,7 @@ async function pushLocalUsersToCloud() {
 
 async function init() {
   await initUDB();
-  await initFirebase(); // ☁️ conectar con la nube (espera a detectar URL correcta)
+  initFirebase(); // ☁️ conectar con la nube (síncrono, no bloquea la UI)
   // Subir todos los usuarios locales a Firebase (por si registraron antes de la nube)
   if (db) pushLocalUsersToCloud();
   const sess=getSess();
