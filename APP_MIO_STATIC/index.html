@@ -395,28 +395,33 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 
     <!-- USUARIOS -->
     <div id="viewUsuarios" style="display:none">
-      <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+      <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
         <div>
           <h4 class="fw-bold mb-0">Usuarios registrados</h4>
           <p class="text-muted small mb-0">Personas que se registraron desde el portal de usuario</p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-primary btn-sm" onclick="loadUsuarios()">
+            <i class="bi bi-arrow-clockwise me-1"></i>Actualizar lista
+          </button>
           <button class="btn btn-success btn-sm" onclick="syncAllUsers()">
-            <i class="bi bi-arrow-repeat me-1"></i>Sincronizar todos
+            <i class="bi bi-arrow-repeat me-1"></i>Sincronizar → Panel
           </button>
           <button class="btn btn-warning btn-sm" onclick="diagnosticoFirebase()">
-            <i class="bi bi-bug me-1"></i>Diagnóstico nube
+            <i class="bi bi-bug me-1"></i>Diagnóstico
           </button>
-          <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('importUserFile').click()">
-            <i class="bi bi-upload me-1"></i>Importar perfil JSON
+          <button class="btn btn-outline-secondary btn-sm" onclick="document.getElementById('importUserFile').click()">
+            <i class="bi bi-upload me-1"></i>Importar JSON
           </button>
           <input type="file" id="importUserFile" accept=".json" style="display:none" onchange="importUserProfile(event)">
-          <a href="usuario.html" target="_blank" class="btn btn-primary btn-sm">
-            <i class="bi bi-box-arrow-up-right me-1"></i>Abrir portal de usuario
+          <a href="usuario.html" target="_blank" class="btn btn-outline-primary btn-sm">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Abrir portal
           </a>
         </div>
       </div>
-      <!-- Resultado diagnóstico — fuera del flex para que ocupe todo el ancho -->
+      <!-- Estado Firebase -->
+      <div id="fbUserStatus" class="alert alert-secondary py-2 mb-3 small" style="display:none"></div>
+      <!-- Resultado diagnóstico -->
       <div id="diagResult" class="mb-3" style="display:none"></div>
       <div class="people-table">
         <div id="usuariosContainer"></div>
@@ -1439,35 +1444,68 @@ async function syncAllUsers() {
 
 // ── USUARIOS ──────────────────────────────────────────────
 async function loadUsuarios() {
-  // Cargar desde Firebase primero (siempre que esté conectado)
+  const c       = document.getElementById('usuariosContainer');
+  const statusEl = document.getElementById('fbUserStatus');
+
+  // Spinner mientras carga
+  c.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><div class="mt-2 text-muted small">Cargando usuarios desde Firebase…</div></div>';
+  if (statusEl) statusEl.style.display = 'none';
+
+  let users = [];
+  let statusMsg = '';
+  let statusType = 'secondary';
+
   if (db) {
     try {
       const snap = await db.ref('usuarios').once('value');
-      const usersObj = snap.val() || {};
-      const cloudUsers = Object.values(usersObj);
-      if (cloudUsers.length > 0) {
+      const val  = snap.val();
+      if (val && typeof val === 'object') {
+        users = Object.values(val);
+        localStorage.setItem('amio_users', JSON.stringify(users));
+        statusMsg  = `✅ Firebase conectado — ${users.length} usuario(s) encontrado(s)`;
+        statusType = 'success';
+      } else {
+        // Firebase vacío — intentar local como fallback
         const local = JSON.parse(localStorage.getItem('amio_users') || '[]');
-        const merged = [...local];
-        for (const cu of cloudUsers) {
-          const idx = merged.findIndex(u => u.id === cu.id);
-          if (idx >= 0) Object.assign(merged[idx], cu);
-          else merged.push(cu);
+        if (local.length) {
+          users = local;
+          statusMsg  = `⚠️ Firebase vacío, mostrando ${local.length} usuario(s) del caché local. El usuario del portal debe abrirlo en su móvil para sincronizar.`;
+          statusType = 'warning';
+        } else {
+          statusMsg  = '⚠️ Firebase conectado pero sin datos. Pide al usuario que abra el portal (usuario.html) en su dispositivo.';
+          statusType = 'warning';
         }
-        localStorage.setItem('amio_users', JSON.stringify(merged));
       }
-    } catch(e) { /* usar datos locales si falla */ }
+    } catch(e) {
+      console.error('loadUsuarios Firebase error:', e);
+      users = JSON.parse(localStorage.getItem('amio_users') || '[]');
+      statusMsg  = `❌ Error Firebase: ${e.code || e.message}. Mostrando datos locales (${users.length}).`;
+      statusType = 'danger';
+    }
+  } else {
+    users = JSON.parse(localStorage.getItem('amio_users') || '[]');
+    statusMsg  = users.length
+      ? `⚠️ Firebase no conectado — mostrando ${users.length} usuario(s) del caché local.`
+      : '❌ Firebase no conectado. Comprueba tu conexión a internet y recarga la página.';
+    statusType = users.length ? 'warning' : 'danger';
   }
 
-  const users = JSON.parse(localStorage.getItem('amio_users') || '[]');
+  // Mostrar estado
+  if (statusEl) {
+    statusEl.className = `alert alert-${statusType} py-2 mb-3 small`;
+    statusEl.textContent = statusMsg;
+    statusEl.style.display = 'block';
+  }
+
   const badge = document.getElementById('userBadge');
   if (badge) badge.textContent = users.length || '';
 
-  const c = document.getElementById('usuariosContainer');
   if (!users.length) {
     c.innerHTML = `<div class="empty-state">
       <i class="bi bi-person-check"></i>
-      <div>Ningún usuario registrado todavía</div>
-      <div class="small mt-2">Comparte el link <strong>usuario.html</strong> para que se registren</div>
+      <div class="fw-semibold">Ningún usuario registrado todavía</div>
+      <div class="small mt-2 text-muted">Comparte el link del portal de usuario para que se registren.<br>
+      Una vez que abran el portal en su dispositivo, aparecerán aquí automáticamente.</div>
     </div>`;
     return;
   }
