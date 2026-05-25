@@ -345,33 +345,38 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 
     <!-- ── EXPORTAR ── -->
     <div id="viewExport" style="display:none">
-      <h4 class="fw-bold mb-4">Exportar mis datos</h4>
-      <div class="form-card mb-4">
-        <p class="section-title"><i class="bi bi-download me-2"></i>Descargar mis datos</p>
-        <p class="text-muted small mb-3">
-          Exporta tu perfil completo (información personal, cuentas bancarias, wallets) en formato JSON.
-          El administrador puede importar este archivo para actualizar tu registro.
-        </p>
-        <div class="d-flex gap-2 flex-wrap">
-          <button class="btn btn-primary" onclick="exportJSON()">
-            <i class="bi bi-filetype-json me-1"></i>Exportar JSON (para el admin)
-          </button>
-          <button class="btn btn-outline-success" onclick="exportExcel()">
-            <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
-          </button>
-          <button class="btn btn-outline-danger" onclick="exportPDF()">
-            <i class="bi bi-file-earmark-pdf me-1"></i>Exportar PDF
-          </button>
+      <h4 class="fw-bold mb-4">Enviar mis datos al administrador</h4>
+
+      <!-- WhatsApp (principal) -->
+      <div class="form-card mb-4" style="border:2px solid #25d366">
+        <p class="section-title" style="color:#128c7e;border-color:#b7f5d8"><i class="bi bi-whatsapp me-2"></i>Compartir por WhatsApp</p>
+        <p class="text-muted small mb-3">Genera un enlace con tus datos y envíaselo al administrador directamente por WhatsApp. Él lo abre y tus datos quedan registrados al instante.</p>
+        <button class="btn btn-success btn-lg w-100" onclick="shareWhatsApp()" style="background:#25d366;border-color:#25d366;font-size:1rem">
+          <i class="bi bi-whatsapp me-2"></i>Enviar mis datos por WhatsApp
+        </button>
+        <div id="shareLinkBox" class="mt-3" style="display:none">
+          <label class="form-label small fw-semibold">O copia este enlace manualmente:</label>
+          <div class="input-group">
+            <input type="text" id="shareLinkInput" class="form-control form-control-sm" readonly>
+            <button class="btn btn-outline-secondary btn-sm" onclick="copyShareLink()"><i class="bi bi-clipboard"></i></button>
+          </div>
         </div>
       </div>
+
+      <!-- Otros formatos -->
       <div class="form-card">
-        <p class="section-title"><i class="bi bi-info-circle me-2"></i>¿Cómo compartir con el administrador?</p>
-        <ol class="text-muted small mb-0" style="line-height: 2">
-          <li>Haz clic en <strong>"Exportar JSON"</strong> — se descarga un archivo con tus datos.</li>
-          <li>Envía ese archivo al administrador por <strong>WhatsApp, email o cualquier medio</strong>.</li>
-          <li>El administrador lo importa en el panel de administración.</li>
-          <li>Tus datos quedan registrados oficialmente en el sistema.</li>
-        </ol>
+        <p class="section-title"><i class="bi bi-download me-2"></i>Otros formatos</p>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-outline-secondary" onclick="exportJSON()">
+            <i class="bi bi-filetype-json me-1"></i>Descargar JSON
+          </button>
+          <button class="btn btn-outline-success" onclick="exportExcel()">
+            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+          </button>
+          <button class="btn btn-outline-danger" onclick="exportPDF()">
+            <i class="bi bi-file-earmark-pdf me-1"></i>PDF
+          </button>
+        </div>
       </div>
     </div>
 
@@ -576,11 +581,34 @@ async function doRegister() {
   };
   users.push(user);
   saveUsers(users);
+  syncUserToPeople(user); // visible en admin panel al instante
   err.classList.add('d-none');
   currentUserId = user.id;
   setSess(user.id);
   toast('¡Cuenta creada! Bienvenido/a.');
   startApp();
+}
+
+// ── SYNC AL PANEL ADMIN (misma localStorage, mismo dispositivo) ──
+function syncUserToPeople(u) {
+  try {
+    const people = JSON.parse(localStorage.getItem('amio_people') || '[]');
+    const person = {
+      id: u.id,
+      fullName: u.displayName || '',
+      dni: u.dni || '',
+      passport: u.passport || '',
+      bankAccounts: u.bankAccounts || [],
+      wallets: u.wallets || [],
+      fromPortal: true,
+      createdAt: u.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const idx = people.findIndex(p => p.id === u.id);
+    if (idx >= 0) Object.assign(people[idx], person);
+    else people.push(person);
+    localStorage.setItem('amio_people', JSON.stringify(people));
+  } catch(e) { /* silencioso si falla */ }
 }
 
 // ── LOGOUT ────────────────────────────────────────────────
@@ -634,6 +662,7 @@ function savePerfil() {
   users[idx].passport    = document.getElementById('pPassport').value.trim();
   users[idx].updatedAt   = new Date().toISOString();
   saveUsers(users);
+  syncUserToPeople(users[idx]);
   document.getElementById('sidebarName').textContent = users[idx].displayName;
   toast('Información guardada');
 }
@@ -668,7 +697,7 @@ function removeBank(i) {
   const users=getUsers(); const idx=users.findIndex(u=>u.id===currentUserId); if(idx<0)return;
   users[idx].bankAccounts.splice(i,1); saveUsers(users); renderBankList();
 }
-function saveBanks() { const users=getUsers(); const idx=users.findIndex(u=>u.id===currentUserId); if(idx<0)return; users[idx].updatedAt=new Date().toISOString(); saveUsers(users); toast('Cuentas guardadas'); }
+function saveBanks() { const users=getUsers(); const idx=users.findIndex(u=>u.id===currentUserId); if(idx<0)return; users[idx].updatedAt=new Date().toISOString(); saveUsers(users); syncUserToPeople(users[idx]); toast('Cuentas guardadas'); }
 
 // Wallets
 function renderWalletList() {
@@ -698,7 +727,7 @@ function removeWallet(i) {
   const users=getUsers();const idx=users.findIndex(u=>u.id===currentUserId);if(idx<0)return;
   users[idx].wallets.splice(i,1);saveUsers(users);renderWalletList();
 }
-function saveWallets(){const users=getUsers();const idx=users.findIndex(u=>u.id===currentUserId);if(idx<0)return;users[idx].updatedAt=new Date().toISOString();saveUsers(users);toast('Wallets guardadas');}
+function saveWallets(){const users=getUsers();const idx=users.findIndex(u=>u.id===currentUserId);if(idx<0)return;users[idx].updatedAt=new Date().toISOString();saveUsers(users);syncUserToPeople(users[idx]);toast('Wallets guardadas');}
 
 // Change password
 async function changePassword() {
@@ -862,6 +891,39 @@ async function downloadDoc(id) {
 }
 function confirmDelDoc(id) {
   showConfirm('¿Eliminar este archivo?', async()=>{ await udbDel(id); toast('Eliminado'); loadDocs(); });
+}
+
+// ── COMPARTIR CON ADMIN ───────────────────────────────────
+function buildShareLink() {
+  const u = getMe(); if (!u) return null;
+  const {passwordHash:_, ...safe} = u;
+  try {
+    const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(safe))));
+    return `https://jonycarmen.github.io/app-mio/?cliente=${encoded}`;
+  } catch { return null; }
+}
+
+function shareWhatsApp() {
+  const link = buildShareLink();
+  if (!link) { toast('Error al generar enlace', 'error'); return; }
+  const u = getMe();
+  if (link.length > 4000) {
+    // Datos muy largos → descargar JSON en su lugar
+    toast('Perfil grande — descargando JSON para enviar manualmente', 'error');
+    exportJSON(); return;
+  }
+  // Mostrar también el enlace copiable
+  document.getElementById('shareLinkBox').style.display = 'block';
+  document.getElementById('shareLinkInput').value = link;
+  const msg = `Hola! Soy ${u.displayName}. Aquí están mis datos para registrarme en el sistema:\n${link}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+}
+
+function copyShareLink() {
+  const inp = document.getElementById('shareLinkInput');
+  inp.select(); inp.setSelectionRange(0, 99999);
+  document.execCommand('copy');
+  toast('Enlace copiado');
 }
 
 // ── EXPORTAR ─────────────────────────────────────────────

@@ -366,6 +366,9 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
           <p class="text-muted small mb-0">Personas que se registraron desde el portal de usuario</p>
         </div>
         <div class="d-flex gap-2">
+          <button class="btn btn-success btn-sm" onclick="syncAllUsers()">
+            <i class="bi bi-arrow-repeat me-1"></i>Sincronizar todos
+          </button>
           <button class="btn btn-outline-primary btn-sm" onclick="document.getElementById('importUserFile').click()">
             <i class="bi bi-upload me-1"></i>Importar perfil JSON
           </button>
@@ -1070,6 +1073,58 @@ function confirmClearData() {
   });
 }
 
+// ── IMPORTAR DESDE URL (enlace WhatsApp) ──────────────────
+function checkURLImport() {
+  const params = new URLSearchParams(window.location.search);
+  const encoded = params.get('cliente');
+  if (!encoded) return;
+  history.replaceState({}, '', window.location.pathname); // limpiar URL
+  try {
+    const u = JSON.parse(decodeURIComponent(escape(atob(encoded))));
+    if (!u.displayName) throw 0;
+    showConfirm(`¿Registrar a "${u.displayName}" como cliente?`, () => {
+      const people = getPeople();
+      const person = {
+        id: u.id || uid(), fullName: u.displayName,
+        dni: u.dni||'', passport: u.passport||'',
+        bankAccounts: u.bankAccounts||[], wallets: u.wallets||[],
+        fromPortal: true,
+        createdAt: u.createdAt || new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+      const idx = people.findIndex(p => p.id === person.id);
+      if (idx >= 0) { Object.assign(people[idx], person); toast(`Datos de "${u.displayName}" actualizados`); }
+      else { people.push(person); toast(`"${u.displayName}" registrado como cliente`); }
+      savePeople(people);
+      navigate('people');
+    });
+  } catch { /* ignorar datos inválidos */ }
+}
+
+// ── SYNC MASIVO ────────────────────────────────────────────
+function syncAllUsers() {
+  const users = JSON.parse(localStorage.getItem('amio_users') || '[]');
+  if (!users.length) { toast('No hay usuarios en el portal todavía', 'error'); return; }
+  const people = getPeople();
+  let added = 0, updated = 0;
+  for (const u of users) {
+    const person = {
+      id: u.id, fullName: u.displayName||'',
+      dni: u.dni||'', passport: u.passport||'',
+      bankAccounts: u.bankAccounts||[], wallets: u.wallets||[],
+      fromPortal: true,
+      createdAt: u.createdAt || new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const idx = people.findIndex(p => p.id === u.id);
+    if (idx >= 0) { Object.assign(people[idx], person); updated++; }
+    else { people.push(person); added++; }
+  }
+  savePeople(people);
+  toast(`Sincronizado: ${added} nuevo${added!==1?'s':''}, ${updated} actualizado${updated!==1?'s':''}`);
+  navigate('people');
+}
+
 // ── USUARIOS ──────────────────────────────────────────────
 function loadUsuarios() {
   const users = JSON.parse(localStorage.getItem('amio_users') || '[]');
@@ -1235,6 +1290,7 @@ document.getElementById('confirmBtn').addEventListener('click', () => {
 // ── INIT ──────────────────────────────────────────────────
 async function init() {
   await Promise.all([initDB(), initUserDB()]);
+  checkURLImport(); // procesa enlace WhatsApp si viene en la URL
   if (isLoggedIn()) {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appContainer').style.display = 'flex';
