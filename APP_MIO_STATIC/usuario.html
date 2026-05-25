@@ -584,6 +584,7 @@ async function doLogin() {
   err.classList.add('d-none');
   currentUserId = user.id;
   setSess(user.id);
+  syncToCloud(user); // ☁️ sincronizar al iniciar sesión
   startApp();
 }
 
@@ -1012,14 +1013,30 @@ document.getElementById('lPass').addEventListener('keydown', e=>{ if(e.key==='En
 document.getElementById('lEmail').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
 
 // ── INIT ──────────────────────────────────────────────────
+// ── SUBIR TODOS LOS USUARIOS EXISTENTES A LA NUBE ────────
+async function pushLocalUsersToCloud() {
+  if (!db) return;
+  const users = getUsers();
+  if (!users.length) return;
+  for (const user of users) {
+    try { await syncToCloud(user); } catch(e) { /* silencioso */ }
+  }
+  console.log(`☁️ ${users.length} usuario(s) sincronizados con la nube`);
+}
+
 async function init() {
   await initUDB();
   initFirebase(); // ☁️ conectar con la nube
+  // Subir todos los usuarios locales a Firebase (por si registraron antes de la nube)
+  if (db) pushLocalUsersToCloud();
   const sess=getSess();
   if(sess){
     currentUserId=sess;
     const u=getMe();
-    if(u){ startApp(); return; }
+    if(u){
+      syncToCloud(u); // ☁️ actualizar datos en la nube al reabrir sesión
+      startApp(); return;
+    }
     clearSess();
   }
 }
