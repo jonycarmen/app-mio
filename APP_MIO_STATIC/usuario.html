@@ -466,6 +466,7 @@ const FIREBASE_CFG = {
   databaseURL:       "https://app-mio-c25cb-default-rtdb.europe-west1.firebasedatabase.app"
 };
 let db = null;
+let _portalSyncedOnce = false;
 
 function setPortalCloudStatus(online) {
   const icon = document.getElementById('cloudSyncIcon');
@@ -479,9 +480,17 @@ function initFirebase() {
     if (FIREBASE_CFG.apiKey === 'PEGAR_API_KEY') return;
     if (!firebase.apps.length) firebase.initializeApp(FIREBASE_CFG);
     db = firebase.database();
-    // Monitorea conexión real
-    db.ref('.info/connected').on('value', snap => setPortalCloudStatus(snap.val() === true));
-    console.log('🔄 Firebase portal iniciado, conectando...');
+    // Monitorea conexión real — sincroniza datos al conectar por primera vez
+    db.ref('.info/connected').on('value', snap => {
+      const online = snap.val() === true;
+      setPortalCloudStatus(online);
+      if (online && !_portalSyncedOnce) {
+        _portalSyncedOnce = true;
+        // Auto-sync silencioso: sube datos locales a Firebase EU al conectar
+        pushLocalUsersToCloud(false);
+      }
+    });
+    console.log('🔄 Firebase portal iniciado, conectando a EU...');
   } catch(e) {
     console.warn('Firebase no disponible:', e);
     setPortalCloudStatus(false);
@@ -489,11 +498,15 @@ function initFirebase() {
 }
 
 async function syncToCloud(user) {
-  if (!db) return;
+  if (!db) return false;
   try {
     const {passwordHash:_, ...safe} = user;
     await db.ref('usuarios/' + user.id).set({...safe, updatedAt: new Date().toISOString()});
-  } catch(e) { console.warn('Error al sincronizar con la nube:', e); }
+    return true;
+  } catch(e) {
+    console.warn('Error al sincronizar con la nube:', e.code || e.message);
+    return false;
+  }
 }
 
 // ── CONFIG ────────────────────────────────────────────────
@@ -1034,30 +1047,37 @@ document.getElementById('lEmail').addEventListener('keydown', e=>{ if(e.key==='E
 
 // ── INIT ──────────────────────────────────────────────────
 // ── SUBIR TODOS LOS USUARIOS EXISTENTES A LA NUBE ────────
-async function pushLocalUsersToCloud() {
-  if (!db) return;
+async function pushLocalUsersToCloud(showToast = true) {
+  if (!db) {
+    if (showToast) toast('Sin conexión a la nube. Espera unos segundos e inténtalo de nuevo.', 'error');
+    return;
+  }
   const users = getUsers();
-  if (!users.length) return;
+  if (!users.length) {
+    if (showToast) toast('No hay datos de perfil para sincronizar.', 'error');
+    return;
+  }
   let ok = 0, fail = 0;
   for (const user of users) {
-    try { await syncToCloud(user); ok++; }
-    catch(e) { fail++; console.warn('Error sync usuario:', user.id, e.message); }
+    const success = await syncToCloud(user);
+    if (success) ok++; else fail++;
   }
   if (ok > 0) {
-    console.log(`☁️ ${ok} usuario(s) sincronizados con la nube`);
-    toast(`☁️ ${ok} perfil${ok > 1 ? 'es' : ''} sincronizado${ok > 1 ? 's' : ''} en la nube`);
+    console.log(`☁️ ${ok} usuario(s) sincronizados con la nube EU`);
+    if (showToast) toast(`☁️ ${ok} perfil${ok > 1 ? 'es' : ''} sincronizado${ok > 1 ? 's' : ''} en la nube`);
   }
   if (fail > 0) {
     console.warn(`❌ ${fail} usuario(s) no pudieron sincronizarse`);
-    toast(`⚠️ ${fail} perfil${fail > 1 ? 'es' : ''} no pudieron subirse a la nube`, 'error');
+    if (showToast) toast(
+      `⚠️ ${fail} perfil(es) no se pudieron subir. Puede ser un problema de permisos en Firebase Rules.`,
+      'error'
+    );
   }
 }
 
 async function init() {
   await initUDB();
-  initFirebase(); // ☁️ conectar con la nube (síncrono, no bloquea la UI)
-  // Subir todos los usuarios locales a Firebase (por si registraron antes de la nube)
-  if (db) pushLocalUsersToCloud();
+  initFirebase(); // ☁️ conectar con la nube — auto-sincroniza al conectar (vía .info/connected)
   const sess=getSess();
   if(sess){
     currentUserId=sess;
