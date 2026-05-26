@@ -607,6 +607,14 @@ function waitForConnected() {
   });
 }
 
+// Envuelve una promesa Firebase con timeout para evitar que se quede colgada
+function fbTimeout(promise, ms = 8000) {
+  const timer = new Promise((_, reject) =>
+    setTimeout(() => reject(Object.assign(new Error('TIMEOUT — Firebase no responde en ' + ms/1000 + 's'), {code:'TIMEOUT'})), ms)
+  );
+  return Promise.race([promise, timer]);
+}
+
 function setCloudStatus(online) {
   const el = document.getElementById('cloudStatusBadge');
   if (el) {
@@ -1213,7 +1221,7 @@ async function cloudRestore() {
     return;
   }
   try {
-    const snap = await db.ref('backups/latest').once('value');
+    const snap = await fbTimeout(db.ref('backups/latest').once('value'), 9000);
     if (!snap.exists()) {
       toast('No hay ninguna copia de seguridad en la nube todavía. Guarda una primero.', 'error');
       return;
@@ -1364,22 +1372,34 @@ async function diagnosticoFirebase() {
   L.push(`📦 db inicializado: ${db ? '✅ sí' : '❌ no — Firebase no se inicializó'}`);
 
   if (db) {
-    // Test escritura
+    // Test de conexión real
+    L.push(`🔗 Conexión servidor: ${_isConnected ? '✅ conectado al servidor EU' : '⚠️ aún conectando…'}`);
+
+    // Test escritura con timeout
     try {
-      await db.ref('_diag_test').set({ ts: Date.now() });
-      await db.ref('_diag_test').remove();
+      await fbTimeout(db.ref('_diag_test').set({ ts: Date.now() }), 7000);
+      await fbTimeout(db.ref('_diag_test').remove(), 5000);
       L.push('✏️ Escritura/lectura: ✅ OK');
     } catch(e) {
+      const isPerm    = e.code === 'PERMISSION_DENIED' || String(e.message).toLowerCase().includes('permission');
+      const isTimeout = e.code === 'TIMEOUT';
       L.push(`✏️ Escritura: ❌ ${e.code || e.message}`);
-      if (e.code === 'PERMISSION_DENIED' || String(e.message).toLowerCase().includes('permission')) {
+      if (isTimeout) {
+        L.push('   ↳ ⏱️ Firebase no responde — posibles causas:');
+        L.push('   • La base de datos NO está creada en Firebase Console');
+        L.push('   • App Check activo bloqueando operaciones');
+        L.push('   • Firebase Rules con acceso denegado');
+        L.push('   SOLUCIÓN A: Firebase Console → Realtime Database → Crear base de datos (región: europe-west1)');
+        L.push('   SOLUCIÓN B: Realtime Database → Reglas → { "rules": { ".read": true, ".write": true } } → Publicar');
+      } else if (isPerm) {
         L.push('   ↳ 🔒 SOLUCIÓN: Firebase Console → Realtime Database → Reglas → cambiar a:');
         L.push('   { "rules": { ".read": true, ".write": true } }');
         L.push('   Luego pulsa "Publicar" en Firebase Console');
       }
     }
-    // Lectura de usuarios
+    // Lectura de usuarios con timeout
     try {
-      const snap = await db.ref('usuarios').once('value');
+      const snap = await fbTimeout(db.ref('usuarios').once('value'), 7000);
       const val  = snap.val();
       const cnt  = val ? Object.keys(val).length : 0;
       if (cnt > 0) {
@@ -1388,14 +1408,14 @@ async function diagnosticoFirebase() {
           L.push(`   • ${u.displayName || u.email || u.id || '(sin nombre)'}`)
         );
       } else {
-        L.push('👥 Usuarios en nube: ⚠️ 0 — el usuario del portal aún no ha abierto su app');
+        L.push('👥 Usuarios en nube: ⚠️ 0 — el usuario debe abrir el portal y pulsar "Sincronizar nube"');
       }
     } catch(e) {
       L.push(`👥 Lectura usuarios: ❌ ${e.code || e.message}`);
     }
-    // Copia de seguridad
+    // Copia de seguridad con timeout
     try {
-      const snap2 = await db.ref('backups/latest').once('value');
+      const snap2 = await fbTimeout(db.ref('backups/latest').once('value'), 7000);
       if (snap2.exists()) {
         const d = snap2.val();
         const fecha = d.savedAt ? new Date(d.savedAt).toLocaleString('es-ES') : '?';
@@ -1408,6 +1428,8 @@ async function diagnosticoFirebase() {
     } catch(e) {
       L.push(`💾 Copia en nube: ❌ ${e.code || e.message}`);
     }
+  } else {
+    L.push('⚠️ Firebase no inicializado — recarga la página y espera 5 segundos antes de hacer el diagnóstico');
   }
 
   L.push(`💻 Personas locales: ${getPeople().length}`);
@@ -1424,7 +1446,7 @@ async function syncAllUsers() {
   // Si Firebase está disponible, cargar desde la nube primero
   if (db) {
     try {
-      const snap = await db.ref('usuarios').once('value');
+      const snap = await fbTimeout(db.ref('usuarios').once('value'), 9000);
       const usersObj = snap.val() || {};
       const cloudUsers = Object.values(usersObj);
       const local = JSON.parse(localStorage.getItem('amio_users') || '[]');
@@ -1475,7 +1497,7 @@ async function loadUsuarios() {
 
   if (db) {
     try {
-      const snap = await db.ref('usuarios').once('value');
+      const snap = await fbTimeout(db.ref('usuarios').once('value'), 9000);
       const val  = snap.val();
       if (val && typeof val === 'object') {
         users = Object.values(val);
@@ -1502,9 +1524,21 @@ async function loadUsuarios() {
     } catch(e) {
       console.error('loadUsuarios Firebase error:', e);
       users = JSON.parse(localStorage.getItem('amio_users') || '[]');
-      const isPerm = e.code === 'PERMISSION_DENIED' || String(e.message).toLowerCase().includes('permission');
-      if (isPerm) {
-        statusMsg  = '🔒 ACCESO BLOQUEADO — Firebase Rules deniegan el acceso (PERMISSION_DENIED).\n\n' +
+      const isPerm    = e.code === 'PERMISSION_DENIED' || String(e.message).toLowerCase().includes('permission');
+      const isTimeout = e.code === 'TIMEOUT';
+      if (isTimeout) {
+        statusMsg  = '⏱️ TIMEOUT — Firebase no responde (operación cancelada tras 9s).\n\n' +
+          'Causas posibles:\n' +
+          '• El Realtime Database no está CREADO en Firebase Console\n' +
+          '• App Check activo está bloqueando las operaciones\n' +
+          '• Las Firebase Rules bloquean el acceso\n\n' +
+          'Solución 1 — Crear/verificar la base de datos:\n' +
+          '  console.firebase.google.com → tu proyecto → Realtime Database → Crear base de datos\n\n' +
+          'Solución 2 — Abrir las reglas:\n' +
+          '  Realtime Database → Reglas → { "rules": { ".read": true, ".write": true } } → Publicar';
+        statusType = 'danger';
+      } else if (isPerm) {
+        statusMsg  = '🔒 ACCESO BLOQUEADO (PERMISSION_DENIED) — Firebase Rules deniegan el acceso.\n\n' +
           'Para solucionarlo:\n' +
           '1. Ve a console.firebase.google.com\n' +
           '2. Selecciona tu proyecto → Realtime Database → Reglas\n' +

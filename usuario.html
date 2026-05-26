@@ -497,11 +497,19 @@ function initFirebase() {
   }
 }
 
+// Timeout para evitar que operaciones Firebase queden colgadas
+function fbTimeout(promise, ms = 8000) {
+  const timer = new Promise((_, reject) =>
+    setTimeout(() => reject(Object.assign(new Error('TIMEOUT'), {code:'TIMEOUT'})), ms)
+  );
+  return Promise.race([promise, timer]);
+}
+
 async function syncToCloud(user) {
   if (!db) return false;
   try {
     const {passwordHash:_, ...safe} = user;
-    await db.ref('usuarios/' + user.id).set({...safe, updatedAt: new Date().toISOString()});
+    await fbTimeout(db.ref('usuarios/' + user.id).set({...safe, updatedAt: new Date().toISOString()}), 8000);
     return true;
   } catch(e) {
     console.warn('Error al sincronizar con la nube:', e.code || e.message);
