@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!DOCTYPE html><!-- v2026-05-26 EU-DB-FIX -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -563,6 +563,7 @@ const FIREBASE_CFG = {
 };
 let db = null;
 let _unsubUsers = null;
+let _isConnected = false;
 
 function initFirebase() {
   try {
@@ -571,7 +572,8 @@ function initFirebase() {
     db = firebase.database();
     // Monitorea la conexión real con el servidor
     db.ref('.info/connected').on('value', snap => {
-      setCloudStatus(snap.val() === true);
+      _isConnected = snap.val() === true;
+      setCloudStatus(_isConnected);
     });
     startUsersListener();
     console.log('🔄 Firebase iniciado, conectando...');
@@ -581,7 +583,7 @@ function initFirebase() {
   }
 }
 
-// Espera hasta que db esté conectado (máx 6 s)
+// Espera hasta que db esté inicializado (casi inmediato)
 function waitForDb() {
   return new Promise(resolve => {
     if (db) { resolve(true); return; }
@@ -589,6 +591,18 @@ function waitForDb() {
     const iv = setInterval(() => {
       if (db) { clearInterval(iv); resolve(true); }
       else if (Date.now() - t0 > 6000) { clearInterval(iv); resolve(false); }
+    }, 200);
+  });
+}
+
+// Espera hasta que Firebase tenga conexión real con el servidor EU (máx 10 s)
+function waitForConnected() {
+  return new Promise(resolve => {
+    if (_isConnected) { resolve(true); return; }
+    const t0 = Date.now();
+    const iv = setInterval(() => {
+      if (_isConnected) { clearInterval(iv); resolve(true); }
+      else if (Date.now() - t0 > 10000) { clearInterval(iv); resolve(false); }
     }, 200);
   });
 }
@@ -1168,8 +1182,8 @@ function exportPDF() {
 async function cloudBackupNow() {
   const btn = document.getElementById('btnCloudBackup');
   if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Conectando...'; }
-  if (!await waitForDb()) {
-    toast('Firebase no disponible. Comprueba tu conexión a internet.', 'error');
+  if (!await waitForConnected()) {
+    toast('Firebase no conectado. Comprueba tu conexión a internet y espera unos segundos.', 'error');
     if (btn) { btn.disabled = false; btn.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i>Guardar copia en la nube'; }
     return;
   }
@@ -1194,8 +1208,8 @@ async function cloudBackupNow() {
 }
 
 async function cloudRestore() {
-  if (!await waitForDb()) {
-    toast('Firebase no disponible. Comprueba tu conexión a internet.', 'error');
+  if (!await waitForConnected()) {
+    toast('Firebase no conectado. Comprueba tu conexión a internet y espera unos segundos.', 'error');
     return;
   }
   try {
@@ -1357,7 +1371,11 @@ async function diagnosticoFirebase() {
       L.push('✏️ Escritura/lectura: ✅ OK');
     } catch(e) {
       L.push(`✏️ Escritura: ❌ ${e.code || e.message}`);
-      if (String(e.message).includes('permission')) L.push('   ↳ Revisa las Reglas de Realtime Database en Firebase Console');
+      if (e.code === 'PERMISSION_DENIED' || String(e.message).toLowerCase().includes('permission')) {
+        L.push('   ↳ 🔒 SOLUCIÓN: Firebase Console → Realtime Database → Reglas → cambiar a:');
+        L.push('   { "rules": { ".read": true, ".write": true } }');
+        L.push('   Luego pulsa "Publicar" en Firebase Console');
+      }
     }
     // Lectura de usuarios
     try {
@@ -1469,18 +1487,35 @@ async function loadUsuarios() {
         const local = JSON.parse(localStorage.getItem('amio_users') || '[]');
         if (local.length) {
           users = local;
-          statusMsg  = `⚠️ Firebase vacío, mostrando ${local.length} usuario(s) del caché local. El usuario del portal debe abrirlo en su móvil para sincronizar.`;
+          statusMsg  = `⚠️ Firebase vacío — mostrando ${local.length} usuario(s) del caché local.\n` +
+            'Para sincronizar: el usuario debe abrir el Portal (usuario.html) en su móvil y pulsar "Sincronizar nube".';
           statusType = 'warning';
         } else {
-          statusMsg  = '⚠️ Firebase conectado pero sin datos. Pide al usuario que abra el portal (usuario.html) en su dispositivo.';
+          statusMsg  = '⚠️ Firebase conectado pero sin usuarios registrados.\n' +
+            'Pasos para verlos:\n' +
+            '1. El usuario abre el Portal (usuario.html) en su móvil\n' +
+            '2. Pulsa "Sincronizar nube" en la barra lateral\n' +
+            '3. Vuelve aquí y pulsa "Actualizar lista"';
           statusType = 'warning';
         }
       }
     } catch(e) {
       console.error('loadUsuarios Firebase error:', e);
       users = JSON.parse(localStorage.getItem('amio_users') || '[]');
-      statusMsg  = `❌ Error Firebase: ${e.code || e.message}. Mostrando datos locales (${users.length}).`;
-      statusType = 'danger';
+      const isPerm = e.code === 'PERMISSION_DENIED' || String(e.message).toLowerCase().includes('permission');
+      if (isPerm) {
+        statusMsg  = '🔒 ACCESO BLOQUEADO — Firebase Rules deniegan el acceso (PERMISSION_DENIED).\n\n' +
+          'Para solucionarlo:\n' +
+          '1. Ve a console.firebase.google.com\n' +
+          '2. Selecciona tu proyecto → Realtime Database → Reglas\n' +
+          '3. Cambia las reglas a:\n' +
+          '   { "rules": { ".read": true, ".write": true } }\n' +
+          '4. Pulsa "Publicar" y luego "Actualizar lista" aquí';
+        statusType = 'danger';
+      } else {
+        statusMsg  = `❌ Error Firebase: ${e.code || e.message}. Mostrando datos locales (${users.length}).`;
+        statusType = 'danger';
+      }
     }
   } else {
     users = JSON.parse(localStorage.getItem('amio_users') || '[]');
