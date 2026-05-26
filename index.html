@@ -188,6 +188,9 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
           <p class="text-muted mb-0 small" id="peopleCountText">0 registros</p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-outline-secondary btn-sm" id="btnPeopleSort" onclick="togglePeopleSort()">
+            <i class="bi bi-sort-alpha-down me-1"></i>A→Z
+          </button>
           <button class="btn btn-outline-success btn-sm" onclick="exportExcel()">
             <i class="bi bi-file-earmark-excel me-1"></i>Excel
           </button>
@@ -403,6 +406,9 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
         <div class="d-flex gap-2 flex-wrap">
           <button class="btn btn-primary btn-sm" onclick="loadUsuarios()">
             <i class="bi bi-arrow-clockwise me-1"></i>Actualizar lista
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" id="btnUsuariosSort" onclick="toggleUsuariosSort()">
+            <i class="bi bi-sort-alpha-down me-1"></i>A→Z
           </button>
           <button class="btn btn-success btn-sm" onclick="syncAllUsers()">
             <i class="bi bi-arrow-repeat me-1"></i>Sincronizar → Panel
@@ -668,6 +674,8 @@ let udb = null;
 let currentPersonId = null;
 let currentTab = 'docs';
 let confirmCb = null;
+let peopleSortOrder   = 'az'; // 'az' | 'za'
+let usuariosSortOrder = 'az';
 
 const DEFAULT_CFG = { adminUser: 'cadeyaj@gmail.com', adminPassword: 'Kira123' };
 
@@ -838,6 +846,13 @@ function renderPeopleList(filter='') {
     ].filter(Boolean).join(' ').toLowerCase().includes(q);
   }) : all;
 
+  // Ordenar alfabéticamente según estado del botón
+  list.sort((a, b) => {
+    const fa = (a.fullName||'').toLowerCase();
+    const fb = (b.fullName||'').toLowerCase();
+    return peopleSortOrder === 'az' ? fa.localeCompare(fb,'es') : fb.localeCompare(fa,'es');
+  });
+
   document.getElementById('peopleCountText').textContent =
     `${list.length} registro${list.length!==1?'s':''}`;
 
@@ -869,6 +884,24 @@ function renderPeopleList(filter='') {
       <th>Nombre</th><th>Pasaporte</th><th>Cuentas</th>
       <th>Última nómina</th><th>Historial</th><th>Acciones</th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
+function togglePeopleSort() {
+  peopleSortOrder = peopleSortOrder === 'az' ? 'za' : 'az';
+  const btn = document.getElementById('btnPeopleSort');
+  if (btn) btn.innerHTML = peopleSortOrder === 'az'
+    ? '<i class="bi bi-sort-alpha-down me-1"></i>A→Z'
+    : '<i class="bi bi-sort-alpha-up-alt me-1"></i>Z→A';
+  renderPeopleList(document.getElementById('searchInput')?.value || '');
+}
+
+function toggleUsuariosSort() {
+  usuariosSortOrder = usuariosSortOrder === 'az' ? 'za' : 'az';
+  const btn = document.getElementById('btnUsuariosSort');
+  if (btn) btn.innerHTML = usuariosSortOrder === 'az'
+    ? '<i class="bi bi-sort-alpha-down me-1"></i>A→Z'
+    : '<i class="bi bi-sort-alpha-up-alt me-1"></i>Z→A';
+  loadUsuarios();
 }
 
 // ── PERSON FORM ───────────────────────────────────────────
@@ -1599,6 +1632,13 @@ async function loadUsuarios() {
     statusEl.textContent = statusMsg;
     statusEl.style.display = 'block';
   }
+
+  // Ordenar alfabéticamente
+  users.sort((a, b) => {
+    const fa = (a.displayName||a.email||'').toLowerCase();
+    const fb = (b.displayName||b.email||'').toLowerCase();
+    return usuariosSortOrder === 'az' ? fa.localeCompare(fb,'es') : fb.localeCompare(fa,'es');
+  });
 
   const badge = document.getElementById('userBadge');
   if (badge) badge.textContent = users.length || '';
