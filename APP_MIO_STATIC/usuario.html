@@ -508,8 +508,8 @@ function initFirebase() {
       setPortalCloudStatus(online);
       if (online && !_portalSyncedOnce) {
         _portalSyncedOnce = true;
-        // Auto-sync silencioso: sube datos locales a Firebase EU al conectar
-        pushLocalUsersToCloud(false);
+        pushLocalUsersToCloud(false); // ☁️ sync perfil al conectar
+        setTimeout(() => syncAllLocalDocsToCloud(), 2000); // ☁️ sync docs previos
       }
     });
     console.log('🔄 Firebase portal iniciado, conectando a EU...');
@@ -540,9 +540,10 @@ async function syncToCloud(user) {
 }
 
 // ── CONFIG ────────────────────────────────────────────────
-const UDB_NAME = 'appMioUserDB', UDB_VER = 1, UDOC_STORE = 'userDocs', MAX_MB = 10;
+const UDB_NAME = 'appMioUserDB', UDB_VER = 1, UDOC_STORE = 'userDocs', MAX_MB = 10, MAX_DOCS = 50;
 let udb = null;
 let currentUserId = null;
+let _docsSyncedOnce = false;
 let confirmCb = null;
 
 // ── UTILS ─────────────────────────────────────────────────
@@ -678,6 +679,28 @@ async function removeDocFromCloud(docId) {
   } catch(e) { console.warn('removeDocFromCloud:', e.code || e.message); }
 }
 
+// Sincroniza todos los docs locales que aún no están en Firebase (primera vez)
+async function syncAllLocalDocsToCloud() {
+  if (!db || _docsSyncedOnce || !currentUserId) return;
+  _docsSyncedOnce = true;
+  try {
+    const localDocs = await udbByUser(currentUserId);
+    if (!localDocs.length) return;
+
+    // Ver qué IDs ya están en la nube
+    const snap = await fbTimeout(db.ref('userDocuments/' + currentUserId).once('value'), 8000);
+    const cloudIds = snap.exists() ? new Set(Object.keys(snap.val() || {})) : new Set();
+    const missing  = localDocs.filter(d => !cloudIds.has(d.id));
+    if (!missing.length) return;
+
+    console.log(`📤 Sincronizando ${missing.length} doc(s) previo(s) a la nube...`);
+    for (const doc of missing) {
+      await syncDocToCloud(doc, doc.data); // doc.data es ArrayBuffer de IndexedDB
+    }
+    console.log('✅ Documentos previos sincronizados');
+  } catch(e) { console.warn('syncAllLocalDocsToCloud:', e.message); }
+}
+
 // ── AUTH UI ───────────────────────────────────────────────
 function showAuthTab(tab) {
   const isLogin = tab==='login';
@@ -736,9 +759,11 @@ async function doLogin() {
   }
   err.classList.add('d-none');
   currentUserId = user.id;
+  _docsSyncedOnce = false; // reset para que la nueva sesión sincronice sus docs
   setSess(user.id);
-  syncToCloud(user); // ☁️ sincronizar al iniciar sesión
+  syncToCloud(user); // ☁️ sincronizar perfil al iniciar sesión
   startApp();
+  setTimeout(() => syncAllLocalDocsToCloud(), 3000); // ☁️ sync docs previos a la nube
   // Si el admin reseteó la contraseña, forzar cambio inmediato
   if (user.needsPasswordReset) {
     setTimeout(() => {
@@ -819,6 +844,7 @@ async function doRegister() {
   syncToCloud(user);      // ☁️ sincroniza a la nube para otros dispositivos
   err.classList.add('d-none');
   currentUserId = user.id;
+  _docsSyncedOnce = false;
   setSess(user.id);
   toast('¡Cuenta creada! Bienvenido/a.');
   startApp();
@@ -1002,7 +1028,7 @@ async function loadDocs() {
     : currentFilter==='pdf'   ? all.filter(d=>d.mimeType==='application/pdf')
     : all.filter(isPhoto);
 
-  document.getElementById('docCountText').textContent = `${all.length} archivo${all.length!==1?'s':''}`;
+  document.getElementById('docCountText').textContent = `${all.length} / ${MAX_DOCS} archivos`;
   const c = document.getElementById('myDocsList');
 
   if (!docs.length) {
@@ -1058,10 +1084,18 @@ async function prepareUpload(input, type) {
   input.value = '';
   if (!files.length) return;
 
+  // Verificar límite de documentos
+  const existingDocs = await udbByUser(currentUserId);
+  const remaining = MAX_DOCS - existingDocs.length;
+  if (remaining <= 0) {
+    toast(`Límite de ${MAX_DOCS} archivos alcanzado. Elimina alguno para continuar.`, 'error'); return;
+  }
+
   const okTypes = ['application/pdf','image/jpeg','image/png','image/gif','image/webp'];
-  const valid = files.filter(f => okTypes.includes(f.type) && f.size <= MAX_MB*1048576);
+  const valid = files.filter(f => okTypes.includes(f.type) && f.size <= MAX_MB*1048576).slice(0, remaining);
   const tooBig = files.filter(f => f.size > MAX_MB*1048576);
   if (tooBig.length) toast(`${tooBig.length} archivo(s) superan ${MAX_MB} MB y fueron omitidos`, 'error');
+  if (files.length - tooBig.length > remaining) toast(`Solo puedes añadir ${remaining} archivo(s) más (límite ${MAX_DOCS})`, 'error');
   if (!valid.length) return;
 
   if (type==='photo' && valid.length > 1) {
@@ -1258,10 +1292,13 @@ async function init() {
   const sess=getSess();
   if(sess){
     currentUserId=sess;
+    _docsSyncedOnce = false;
     const u=getMe();
     if(u){
       syncToCloud(u); // ☁️ actualizar datos en la nube al reabrir sesión
-      startApp(); return;
+      startApp();
+      setTimeout(() => syncAllLocalDocsToCloud(), 3000); // ☁️ sync docs previos
+      return;
     }
     clearSess();
   }
