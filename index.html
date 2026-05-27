@@ -1962,35 +1962,37 @@ async function loadAllDocs() {
   }
 
   try {
-    const snap = await fbTimeout(db.ref('userDocuments').once('value'), 15000);
+    const snap = await fbTimeout(db.ref('userDocuments').once('value'), 20000);
 
     if (!snap.exists()) {
       c.innerHTML = `<div class="empty-state"><i class="bi bi-folder2-open"></i>
         <div>Ningún cliente ha subido documentos aún</div>
-        <div class="small text-muted mt-1">Los documentos aparecen aquí en cuanto los clientes los suben desde su portal</div></div>`;
+        <div class="small text-muted mt-1">Los documentos se sincronizan automáticamente cuando los clientes abren su portal</div></div>`;
       return;
     }
 
-    // Resolver nombres desde la caché local
-    const users = JSON.parse(localStorage.getItem('amio_users') || '[]');
-    const nameOf = id => {
+    // Usar val() + Object.entries() — más fiable que forEach() con datos grandes
+    const rootVal = snap.val() || {};
+    const users   = JSON.parse(localStorage.getItem('amio_users') || '[]');
+    const nameOf  = id => {
       const u = users.find(u => u.id === id);
       return u ? (u.displayName || u.email || id) : id;
     };
 
     _allDocsCache = [];
-    snap.forEach(userSnap => {
-      const userId   = userSnap.key;
+    for (const [userId, userDocsObj] of Object.entries(rootVal)) {
+      if (!userDocsObj || typeof userDocsObj !== 'object') continue;
       const userName = nameOf(userId);
-      userSnap.forEach(docSnap => {
-        _allDocsCache.push({...docSnap.val(), _userName: userName, _userId: userId});
-      });
-    });
+      for (const [, doc] of Object.entries(userDocsObj)) {
+        if (!doc || typeof doc !== 'object' || !doc.id) continue;
+        _allDocsCache.push({...doc, _userName: userName, _userId: userId});
+      }
+    }
 
     // Más recientes primero
-    _allDocsCache.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+    _allDocsCache.sort((a, b) => (b.uploadedAt || '').localeCompare(a.uploadedAt || ''));
 
-    // Actualizar badge del menú
+    // Badge del menú
     const badge = document.getElementById('allDocsBadge');
     if (badge) badge.textContent = _allDocsCache.length || '';
 
@@ -2019,7 +2021,7 @@ function renderAllDocs() {
   const docs = _allDocsCache.filter(d => {
     if (_allDocsFilter === 'photo' && !isPhoto(d)) return false;
     if (_allDocsFilter === 'pdf'   &&  isPhoto(d)) return false;
-    if (q && !d.filename.toLowerCase().includes(q) && !d._userName.toLowerCase().includes(q)) return false;
+    if (q && !(d.filename||'').toLowerCase().includes(q) && !(d._userName||'').toLowerCase().includes(q)) return false;
     return true;
   });
 
@@ -2031,15 +2033,17 @@ function renderAllDocs() {
   // Cachear para downloadCloudDoc()
   docs.forEach(d => { window._currentUserDocs[d.id] = d; });
 
-  // Agrupar por usuario
+  // Agrupar por usuario (manteniendo orden de primer aparición)
+  const groupOrder = [];
   const groups = {};
   docs.forEach(d => {
-    if (!groups[d._userId]) groups[d._userId] = {name: d._userName, docs: []};
+    if (!groups[d._userId]) { groups[d._userId] = {name: d._userName, docs: []}; groupOrder.push(d._userId); }
     groups[d._userId].docs.push(d);
   });
 
   let html = '';
-  for (const group of Object.values(groups)) {
+  for (const userId of groupOrder) {
+    const group  = groups[userId];
     const photos = group.docs.filter(isPhoto);
     const pdfs   = group.docs.filter(d => !isPhoto(d));
 
@@ -2053,9 +2057,10 @@ function renderAllDocs() {
     if (photos.length) {
       html += `<div class="photo-grid mb-3">`;
       for (const d of photos) {
+        // NO embeber base64 en el HTML — se asigna después con querySelectorAll
         html += `<div class="photo-thumb">
-          <img src="data:${d.mimeType};base64,${d.data}" loading="lazy">
-          <div class="ph-name">${esc(d.filename)}</div>
+          <img data-docid="${d.id}" loading="lazy" style="background:#e2e8f0">
+          <div class="ph-name">${esc(d.filename||'')}</div>
           <div class="ph-overlay">
             <button class="btn btn-sm btn-light" onclick="downloadCloudDoc('${d.id}')" title="Descargar">
               <i class="bi bi-download"></i>
@@ -2070,10 +2075,10 @@ function renderAllDocs() {
       html += pdfs.map(d => `<div class="doc-item">
         <i class="bi bi-file-earmark-pdf doc-icon pdf fs-3"></i>
         <div class="doc-info">
-          <div class="doc-name">${esc(d.filename)}</div>
+          <div class="doc-name">${esc(d.filename||'')}</div>
           <div class="doc-meta">
             ${d.category?`<span class="badge bg-light text-dark me-1">${esc(d.category)}</span>`:''}
-            ${esc(d.description||'')} · ${fmtSize(d.size)} · ${fmtDate(d.uploadedAt)}
+            ${esc(d.description||'')} · ${fmtSize(d.size||0)} · ${fmtDate(d.uploadedAt||'')}
           </div>
         </div>
         <button class="btn btn-primary btn-sm flex-shrink-0" onclick="downloadCloudDoc('${d.id}')">
@@ -2086,6 +2091,12 @@ function renderAllDocs() {
   }
 
   c.innerHTML = html;
+
+  // Asignar src de las fotos DESPUÉS de insertar el HTML (evita HTML masivo con base64)
+  c.querySelectorAll('img[data-docid]').forEach(img => {
+    const d = window._currentUserDocs[img.dataset.docid];
+    if (d && d.data && d.mimeType) img.src = `data:${d.mimeType};base64,${d.data}`;
+  });
 }
 
 function importUserProfile(e) {
