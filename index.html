@@ -1038,24 +1038,101 @@ function switchTab(tab) {
 }
 
 async function renderDocs() {
-  const docs = (await dbByPerson(currentPersonId)).sort((a,b)=>b.uploadedAt.localeCompare(a.uploadedAt));
-  document.getElementById('docCount').textContent = docs.length;
+  const person = getPeople().find(x => x.id === currentPersonId);
+  if (!person) return;
+
   const c = document.getElementById('docsList');
-  if (!docs.length) { c.innerHTML=`<div class="empty-state"><i class="bi bi-file-earmark"></i><div>Sin documentos</div></div>`; return; }
-  c.innerHTML = docs.map(d=>{
-    const isPdf = d.mimeType==='application/pdf';
+  c.innerHTML = '<div class="text-center text-muted py-3"><div class="spinner-border spinner-border-sm"></div></div>';
+
+  // ── Local docs (admin IndexedDB) ─────────────────────────
+  const localDocs = (await dbByPerson(currentPersonId)).map(d => ({...d, _src:'local'}));
+
+  // ── Auto-link person → user by exact name match ──────────
+  let linkedId = person.linkedUserId || null;
+  if (!linkedId) {
+    const users = JSON.parse(localStorage.getItem('amio_users') || '[]');
+    const match = users.find(u =>
+      u.displayName && u.displayName.trim().toLowerCase() === person.fullName.trim().toLowerCase()
+    );
+    if (match) {
+      linkedId = match.id;
+      const people = getPeople();
+      const idx = people.findIndex(p => p.id === currentPersonId);
+      if (idx >= 0) { people[idx].linkedUserId = linkedId; savePeople(people); }
+    }
+  }
+
+  // ── Cloud docs from Firebase ─────────────────────────────
+  let cloudDocs = [];
+  if (linkedId && _isConnected && db) {
+    try {
+      const snap = await fbTimeout(db.ref('userDocuments/' + linkedId).once('value'), 8000);
+      if (snap.exists()) snap.forEach(child => cloudDocs.push({...child.val(), _src:'cloud'}));
+    } catch(e) { console.warn('renderDocs cloud fetch:', e.message); }
+  }
+
+  // ── Merge (cloud wins on same id), sort newest first ─────
+  const seen = new Set();
+  const all  = [];
+  [...cloudDocs, ...localDocs].forEach(d => { if (!seen.has(d.id)) { seen.add(d.id); all.push(d); } });
+  all.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+
+  document.getElementById('docCount').textContent = all.length;
+
+  if (!all.length) {
+    c.innerHTML = `<div class="empty-state"><i class="bi bi-file-earmark"></i><div>Sin documentos</div></div>`;
+    return;
+  }
+
+  // cache cloud docs for downloadCloudDoc()
+  all.forEach(d => { if (d._src === 'cloud') window._currentUserDocs[d.id] = d; });
+
+  const isPhoto = d => d.mimeType && d.mimeType.startsWith('image/');
+  const photos  = all.filter(isPhoto);
+  const pdfs    = all.filter(d => !isPhoto(d));
+  let html = '';
+
+  // Photo grid ─────────────────────────────────────────────
+  if (photos.length) {
+    html += `<div class="photo-grid mb-3">`;
+    for (const d of photos) {
+      const imgSrc = d._src === 'cloud'
+        ? `data:${d.mimeType};base64,${d.data}`
+        : URL.createObjectURL(new Blob([d.data], {type: d.mimeType}));
+      const onload = d._src === 'local' ? ` onload="URL.revokeObjectURL(this.src)"` : '';
+      const dlBtn  = d._src === 'cloud'
+        ? `<button class="btn btn-sm btn-light" onclick="downloadCloudDoc('${d.id}')" title="Descargar"><i class="bi bi-download"></i></button>`
+        : `<button class="btn btn-sm btn-light" onclick="downloadDoc('${d.id}')" title="Descargar"><i class="bi bi-download"></i></button>
+           <button class="btn btn-sm btn-danger" onclick="confirmDelDoc('${d.id}')" title="Eliminar"><i class="bi bi-trash"></i></button>`;
+      html += `<div class="photo-thumb">
+        <img src="${imgSrc}" loading="lazy"${onload}>
+        <div class="ph-name">${esc(d.filename)}</div>
+        <div class="ph-overlay">${dlBtn}</div>
+      </div>`;
+    }
+    html += `</div>`;
+  }
+
+  // PDF list ───────────────────────────────────────────────
+  html += pdfs.map(d => {
+    const cloudBadge = d._src === 'cloud'
+      ? ` <span class="badge bg-info bg-opacity-75 ms-1 fw-normal" style="font-size:.68rem"><i class="bi bi-cloud-check me-1"></i>cliente</span>`
+      : '';
+    const btns = d._src === 'cloud'
+      ? `<button class="btn btn-outline-primary btn-sm" onclick="downloadCloudDoc('${d.id}')"><i class="bi bi-download"></i></button>`
+      : `<button class="btn btn-outline-primary btn-sm" onclick="downloadDoc('${d.id}')"><i class="bi bi-download"></i></button>
+         <button class="btn btn-outline-danger btn-sm"  onclick="confirmDelDoc('${d.id}')"><i class="bi bi-trash"></i></button>`;
     return `<div class="doc-item">
-      <i class="bi ${isPdf?'bi-file-earmark-pdf doc-icon pdf':'bi-file-earmark-image doc-icon img'}"></i>
+      <i class="bi bi-file-earmark-pdf doc-icon pdf"></i>
       <div class="doc-info">
-        <div class="doc-name">${esc(d.filename)}</div>
+        <div class="doc-name">${esc(d.filename)}${cloudBadge}</div>
         <div class="doc-meta">${d.category?`<span class="badge bg-light text-dark me-1">${esc(d.category)}</span>`:''}${esc(d.description||'')} · ${fmtSize(d.size)} · ${fmtDate(d.uploadedAt)}</div>
       </div>
-      <div class="d-flex gap-1 flex-shrink-0">
-        <button class="btn btn-outline-primary btn-sm" onclick="downloadDoc('${d.id}')"><i class="bi bi-download"></i></button>
-        <button class="btn btn-outline-danger btn-sm"  onclick="confirmDelDoc('${d.id}')"><i class="bi bi-trash"></i></button>
-      </div>
+      <div class="d-flex gap-1 flex-shrink-0">${btns}</div>
     </div>`;
   }).join('');
+
+  c.innerHTML = html;
 }
 
 function renderPayrolls() {
@@ -1702,6 +1779,9 @@ function importUserAsPerson(userId) {
   const u = users.find(x => x.id === userId);
   if (!u) return;
   const people = getPeople();
+  if (people.some(p => p.linkedUserId === u.id)) {
+    toast('Este usuario ya está vinculado a una persona', 'error'); return;
+  }
   if (people.some(p => p.dni && p.dni === u.dni)) {
     toast('Ya existe una persona con ese DNI', 'error'); return;
   }
@@ -1709,6 +1789,7 @@ function importUserAsPerson(userId) {
     const person = {
       id: uid(), fullName: u.displayName, dni: u.dni||'', passport: u.passport||'',
       bankAccounts: u.bankAccounts||[], wallets: u.wallets||[],
+      linkedUserId: u.id,
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
     people.push(person);
