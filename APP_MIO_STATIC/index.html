@@ -83,6 +83,14 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 .doc-info { flex: 1; min-width: 0; }
 .doc-name { font-weight: 500; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .doc-meta { font-size: .78rem; color: #64748b; }
+
+/* PHOTO GRID (docs modal) */
+.photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .6rem; padding: .75rem; }
+.photo-thumb { position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 1; background: #f1f5f9; }
+.photo-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.photo-thumb .ph-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.45); opacity: 0; transition: .2s; display: flex; align-items: center; justify-content: center; }
+.photo-thumb:hover .ph-overlay { opacity: 1; }
+.photo-thumb .ph-name { position: absolute; bottom: 0; left: 0; right: 0; background: linear-gradient(transparent,rgba(0,0,0,.6)); color: #fff; font-size: .7rem; padding: .3rem .4rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .payroll-item { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: .75rem 1rem; margin-bottom: .5rem; display: flex; align-items: center; justify-content: space-between; }
 .payroll-amount { font-size: 1.1rem; font-weight: 700; color: #059669; }
 .payroll-date { font-size: .85rem; color: #64748b; }
@@ -1719,47 +1727,98 @@ function confirmDeleteUser(userId) {
   });
 }
 
+window._currentUserDocs = {};
+
 async function openUserDocs(userId, userName) {
   document.getElementById('userDocsName').textContent = userName;
   document.getElementById('userDocsBody').innerHTML =
     '<div class="text-center text-muted py-4"><div class="spinner-border spinner-border-sm"></div> Cargando...</div>';
   new bootstrap.Modal(document.getElementById('userDocsModal')).show();
 
-  const docs = await udbDocsByUser(userId);
   const body = document.getElementById('userDocsBody');
 
-  if (!docs.length) {
-    body.innerHTML = `<div class="empty-state"><i class="bi bi-folder2-open"></i><div>Este usuario no ha subido documentos</div></div>`;
+  if (!_isConnected) {
+    body.innerHTML = `<div class="alert alert-warning m-3">
+      <i class="bi bi-wifi-off me-2"></i>Sin conexión a Firebase. Conecta para ver los documentos del cliente.</div>`;
     return;
   }
 
-  docs.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
-  body.innerHTML = docs.map(d => {
-    const isPdf = d.mimeType === 'application/pdf';
-    return `<div class="doc-item">
-      <i class="bi ${isPdf ? 'bi-file-earmark-pdf doc-icon pdf' : 'bi-file-earmark-image doc-icon img'}"></i>
-      <div class="doc-info">
-        <div class="doc-name">${esc(d.filename)}</div>
-        <div class="doc-meta">
-          ${d.category ? `<span class="badge bg-light text-dark me-1">${esc(d.category)}</span>` : ''}
-          ${esc(d.description || '')}
-          · ${fmtSize(d.size)}
-          · ${fmtDate(d.uploadedAt)}
+  try {
+    const snap = await fbTimeout(db.ref('userDocuments/' + userId).once('value'), 10000);
+
+    if (!snap.exists()) {
+      body.innerHTML = `<div class="empty-state"><i class="bi bi-folder2-open"></i>
+        <div>Este usuario no ha subido documentos</div>
+        <div class="small text-muted mt-1">Los documentos aparecen aquí en cuanto el cliente los sube desde su portal</div></div>`;
+      return;
+    }
+
+    const docs = [];
+    snap.forEach(child => docs.push(child.val()));
+    docs.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+
+    // cache para descarga
+    window._currentUserDocs = {};
+    docs.forEach(d => { window._currentUserDocs[d.id] = d; });
+
+    const isPhoto = d => d.mimeType && d.mimeType.startsWith('image/');
+    const photos  = docs.filter(isPhoto);
+    const pdfs    = docs.filter(d => !isPhoto(d));
+
+    let html = '';
+
+    if (photos.length) {
+      html += `<div class="photo-grid">`;
+      for (const d of photos) {
+        html += `<div class="photo-thumb">
+          <img src="data:${d.mimeType};base64,${d.data}" loading="lazy">
+          <div class="ph-name">${esc(d.filename)}</div>
+          <div class="ph-overlay">
+            <button class="btn btn-sm btn-light" onclick="downloadCloudDoc('${d.id}')" title="Descargar">
+              <i class="bi bi-download"></i>
+            </button>
+          </div>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+
+    if (pdfs.length) {
+      html += `<div class="p-3 pt-${photos.length ? '0' : '3'}">`;
+      html += pdfs.map(d => `<div class="doc-item">
+        <i class="bi bi-file-earmark-pdf doc-icon pdf fs-3"></i>
+        <div class="doc-info">
+          <div class="doc-name">${esc(d.filename)}</div>
+          <div class="doc-meta">
+            ${d.category ? `<span class="badge bg-light text-dark me-1">${esc(d.category)}</span>` : ''}
+            ${esc(d.description || '')} · ${fmtSize(d.size)} · ${fmtDate(d.uploadedAt)}
+          </div>
         </div>
-      </div>
-      <button class="btn btn-primary btn-sm flex-shrink-0" onclick="downloadUserDoc('${d.id}')">
-        <i class="bi bi-download me-1"></i>Descargar
-      </button>
-    </div>`;
-  }).join('');
+        <button class="btn btn-primary btn-sm flex-shrink-0" onclick="downloadCloudDoc('${d.id}')">
+          <i class="bi bi-download me-1"></i>Descargar
+        </button>
+      </div>`).join('');
+      html += `</div>`;
+    }
+
+    body.innerHTML = html;
+  } catch(e) {
+    body.innerHTML = `<div class="alert alert-danger m-3">
+      <i class="bi bi-exclamation-triangle me-2"></i>Error al cargar documentos: ${e.code || e.message}</div>`;
+  }
 }
 
-async function downloadUserDoc(docId) {
-  const d = await udbGetDoc(docId);
+function downloadCloudDoc(docId) {
+  const d = window._currentUserDocs[docId];
   if (!d) { toast('Documento no encontrado', 'error'); return; }
-  const url = URL.createObjectURL(new Blob([d.data], { type: d.mimeType }));
-  Object.assign(document.createElement('a'), { href: url, download: d.filename }).click();
-  URL.revokeObjectURL(url);
+  try {
+    const byteChars = atob(d.data);
+    const bytes = new Uint8Array(byteChars.length);
+    for (let i = 0; i < byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+    const url = URL.createObjectURL(new Blob([bytes], { type: d.mimeType }));
+    Object.assign(document.createElement('a'), { href: url, download: d.filename }).click();
+    URL.revokeObjectURL(url);
+  } catch(e) { toast('Error al descargar: ' + (e.message || e), 'error'); }
 }
 
 function importUserProfile(e) {

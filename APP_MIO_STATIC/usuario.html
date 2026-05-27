@@ -617,6 +617,67 @@ const udbByUser = uid => new Promise((ok,fail)=>{
   tx.onerror = fail;
 });
 
+// ── CLOUD DOCUMENT SYNC ───────────────────────────────────
+function arrayBufToBase64(buf) {
+  const bytes = new Uint8Array(buf);
+  let binary = '';
+  const chunk = 8192;
+  for (let i = 0; i < bytes.length; i += chunk)
+    binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+  return btoa(binary);
+}
+
+async function compressImg(file, maxPx = 1200, q = 0.82) {
+  return new Promise(resolve => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let w = img.naturalWidth, h = img.naturalHeight;
+      if (w > maxPx || h > maxPx) {
+        if (w >= h) { h = Math.round(h * maxPx / w); w = maxPx; }
+        else        { w = Math.round(w * maxPx / h); h = maxPx; }
+      }
+      const c = Object.assign(document.createElement('canvas'), {width:w, height:h});
+      c.getContext('2d').drawImage(img, 0, 0, w, h);
+      c.toBlob(blob => blob.arrayBuffer().then(resolve), 'image/jpeg', q);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); file.arrayBuffer().then(resolve); };
+    img.src = url;
+  });
+}
+
+const CLOUD_DOC_MAX = 4 * 1024 * 1024; // 4 MB máx en nube
+
+async function syncDocToCloud(doc, rawBuf) {
+  if (!db) return;
+  try {
+    let buf = rawBuf;
+    if (doc.mimeType && doc.mimeType.startsWith('image/')) {
+      const f = new File([rawBuf], doc.filename, {type: doc.mimeType});
+      buf = await compressImg(f);
+    }
+    if (buf.byteLength > CLOUD_DOC_MAX) {
+      console.warn('Documento demasiado grande para la nube:', doc.filename);
+      return;
+    }
+    const b64 = arrayBufToBase64(buf);
+    await fbTimeout(db.ref('userDocuments/' + doc.userId + '/' + doc.id).set({
+      id: doc.id, userId: doc.userId, filename: doc.filename,
+      mimeType: doc.mimeType, size: buf.byteLength,
+      category: doc.category || '', description: doc.description || '',
+      uploadedAt: doc.uploadedAt, data: b64,
+    }), 20000);
+  } catch(e) { console.warn('syncDocToCloud:', e.code || e.message); }
+}
+
+async function removeDocFromCloud(docId) {
+  if (!db || !currentUserId) return;
+  try {
+    await fbTimeout(db.ref('userDocuments/' + currentUserId + '/' + docId).remove(), 8000);
+  } catch(e) { console.warn('removeDocFromCloud:', e.code || e.message); }
+}
+
 // ── AUTH UI ───────────────────────────────────────────────
 function showAuthTab(tab) {
   const isLogin = tab==='login';
@@ -1008,8 +1069,10 @@ async function prepareUpload(input, type) {
     let count = 0;
     for (const file of valid) {
       const buf = await file.arrayBuffer();
-      await udbAdd({id:uid(),userId:currentUserId,filename:file.name,mimeType:file.type,
-        size:file.size,category:'Foto',description:'',uploadedAt:new Date().toISOString(),data:buf});
+      const doc = {id:uid(),userId:currentUserId,filename:file.name,mimeType:file.type,
+        size:file.size,category:'Foto',description:'',uploadedAt:new Date().toISOString(),data:buf};
+      await udbAdd(doc);
+      syncDocToCloud(doc, buf); // fire-and-forget
       count++;
     }
     toast(`${count} foto${count!==1?'s':''} guardada${count!==1?'s':''}`);
@@ -1048,8 +1111,10 @@ async function handleUpload() {
   try {
     for (const file of pendingFiles) {
       const buf = await file.arrayBuffer();
-      await udbAdd({id:uid(),userId:currentUserId,filename:file.name,mimeType:file.type,
-        size:file.size,category:cat,description:des,uploadedAt:new Date().toISOString(),data:buf});
+      const doc = {id:uid(),userId:currentUserId,filename:file.name,mimeType:file.type,
+        size:file.size,category:cat,description:des,uploadedAt:new Date().toISOString(),data:buf};
+      await udbAdd(doc);
+      syncDocToCloud(doc, buf); // fire-and-forget
     }
     bootstrap.Modal.getInstance(document.getElementById('uploadModal')).hide();
     pendingFiles = [];
@@ -1065,7 +1130,12 @@ async function downloadDoc(id) {
   URL.revokeObjectURL(url);
 }
 function confirmDelDoc(id) {
-  showConfirm('¿Eliminar este archivo?', async()=>{ await udbDel(id); toast('Eliminado'); loadDocs(); });
+  showConfirm('¿Eliminar este archivo?', async()=>{
+    await udbDel(id);
+    removeDocFromCloud(id); // fire-and-forget
+    toast('Eliminado');
+    loadDocs();
+  });
 }
 
 // ── COMPARTIR CON ADMIN ───────────────────────────────────
