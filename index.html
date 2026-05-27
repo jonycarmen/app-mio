@@ -164,6 +164,11 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
             <i class="bi bi-person-check"></i>Usuarios <span class="badge bg-secondary ms-1" id="userBadge" style="font-size:.7rem"></span>
           </a>
         </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" id="navAllDocs" onclick="navigate('allDocs');return false;">
+            <i class="bi bi-folder2-open"></i>Documentos <span class="badge bg-secondary ms-1" id="allDocsBadge" style="font-size:.7rem"></span>
+          </a>
+        </li>
         <li class="nav-item px-2 mt-1">
           <span id="cloudStatusBadge" style="display:none"></span>
         </li>
@@ -439,6 +444,42 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
       <div id="diagResult" class="mb-3" style="display:none"></div>
       <div class="people-table">
         <div id="usuariosContainer"></div>
+      </div>
+    </div>
+
+    <!-- ALL DOCS -->
+    <div id="viewAllDocs" style="display:none">
+      <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <div>
+          <h4 class="fw-bold mb-0">Documentos de clientes</h4>
+          <p class="text-muted small mb-0">Todos los archivos subidos desde el portal de usuario</p>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-primary btn-sm" onclick="loadAllDocs()">
+            <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+          </button>
+          <div class="btn-group btn-group-sm">
+            <button class="btn btn-outline-secondary active" id="allDocsFilter_all" onclick="filterAllDocs('all')">Todos</button>
+            <button class="btn btn-outline-secondary" id="allDocsFilter_photo" onclick="filterAllDocs('photo')">
+              <i class="bi bi-image me-1"></i>Fotos
+            </button>
+            <button class="btn btn-outline-secondary" id="allDocsFilter_pdf" onclick="filterAllDocs('pdf')">
+              <i class="bi bi-file-earmark-pdf me-1"></i>PDFs
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="mb-3">
+        <div class="search-box" style="max-width:460px">
+          <i class="bi bi-search"></i>
+          <input type="text" id="allDocsSearch" class="form-control"
+            placeholder="Buscar por nombre de archivo o usuario..." oninput="renderAllDocs()">
+        </div>
+      </div>
+      <div id="allDocsContainer">
+        <div class="text-center text-muted py-5">
+          <div class="spinner-border mb-2"></div><div>Cargando documentos...</div>
+        </div>
       </div>
     </div>
 
@@ -821,7 +862,7 @@ function togglePass() {
 
 // ── NAVIGATION ────────────────────────────────────────────
 function navigate(view, id=null) {
-  ['viewPeopleList','viewPersonForm','viewPersonDetail','viewSettings','viewUsuarios']
+  ['viewPeopleList','viewPersonForm','viewPersonDetail','viewSettings','viewUsuarios','viewAllDocs']
     .forEach(v => document.getElementById(v).style.display='none');
   document.querySelectorAll('.sidebar-nav .nav-link')
     .forEach(l => l.classList.remove('active'));
@@ -838,6 +879,8 @@ function navigate(view, id=null) {
     show('viewSettings'); actNav('navSettings'); loadSettings();
   } else if (view==='usuarios') {
     show('viewUsuarios'); actNav('navUsuarios'); loadUsuarios();
+  } else if (view==='allDocs') {
+    show('viewAllDocs'); actNav('navAllDocs'); loadAllDocs();
   }
 }
 function show(id) { document.getElementById(id).style.display='block'; }
@@ -1900,6 +1943,149 @@ function downloadCloudDoc(docId) {
     Object.assign(document.createElement('a'), { href: url, download: d.filename }).click();
     URL.revokeObjectURL(url);
   } catch(e) { toast('Error al descargar: ' + (e.message || e), 'error'); }
+}
+
+// ── TODOS LOS DOCUMENTOS ──────────────────────────────────
+let _allDocsCache  = [];
+let _allDocsFilter = 'all';
+let _allDocsLoaded = false;
+
+async function loadAllDocs() {
+  _allDocsLoaded = false;
+  const c = document.getElementById('allDocsContainer');
+  c.innerHTML = '<div class="text-center text-muted py-5"><div class="spinner-border mb-2"></div><div>Cargando documentos de la nube...</div></div>';
+
+  if (!_isConnected || !db) {
+    c.innerHTML = `<div class="alert alert-warning m-0">
+      <i class="bi bi-wifi-off me-2"></i>Sin conexión a Firebase. Conecta para ver los documentos.</div>`;
+    return;
+  }
+
+  try {
+    const snap = await fbTimeout(db.ref('userDocuments').once('value'), 15000);
+
+    if (!snap.exists()) {
+      c.innerHTML = `<div class="empty-state"><i class="bi bi-folder2-open"></i>
+        <div>Ningún cliente ha subido documentos aún</div>
+        <div class="small text-muted mt-1">Los documentos aparecen aquí en cuanto los clientes los suben desde su portal</div></div>`;
+      return;
+    }
+
+    // Resolver nombres desde la caché local
+    const users = JSON.parse(localStorage.getItem('amio_users') || '[]');
+    const nameOf = id => {
+      const u = users.find(u => u.id === id);
+      return u ? (u.displayName || u.email || id) : id;
+    };
+
+    _allDocsCache = [];
+    snap.forEach(userSnap => {
+      const userId   = userSnap.key;
+      const userName = nameOf(userId);
+      userSnap.forEach(docSnap => {
+        _allDocsCache.push({...docSnap.val(), _userName: userName, _userId: userId});
+      });
+    });
+
+    // Más recientes primero
+    _allDocsCache.sort((a, b) => b.uploadedAt.localeCompare(a.uploadedAt));
+
+    // Actualizar badge del menú
+    const badge = document.getElementById('allDocsBadge');
+    if (badge) badge.textContent = _allDocsCache.length || '';
+
+    _allDocsLoaded = true;
+    renderAllDocs();
+  } catch(e) {
+    c.innerHTML = `<div class="alert alert-danger m-0">
+      <i class="bi bi-exclamation-triangle me-2"></i>Error al cargar: ${e.code || e.message}</div>`;
+  }
+}
+
+function filterAllDocs(f) {
+  _allDocsFilter = f;
+  ['all','photo','pdf'].forEach(k => {
+    document.getElementById('allDocsFilter_' + k)?.classList.toggle('active', k === f);
+  });
+  renderAllDocs();
+}
+
+function renderAllDocs() {
+  if (!_allDocsLoaded) return;
+  const c = document.getElementById('allDocsContainer');
+  const q = (document.getElementById('allDocsSearch')?.value || '').toLowerCase().trim();
+  const isPhoto = d => d.mimeType && d.mimeType.startsWith('image/');
+
+  const docs = _allDocsCache.filter(d => {
+    if (_allDocsFilter === 'photo' && !isPhoto(d)) return false;
+    if (_allDocsFilter === 'pdf'   &&  isPhoto(d)) return false;
+    if (q && !d.filename.toLowerCase().includes(q) && !d._userName.toLowerCase().includes(q)) return false;
+    return true;
+  });
+
+  if (!docs.length) {
+    c.innerHTML = `<div class="empty-state"><i class="bi bi-folder2-open"></i><div>Sin resultados</div></div>`;
+    return;
+  }
+
+  // Cachear para downloadCloudDoc()
+  docs.forEach(d => { window._currentUserDocs[d.id] = d; });
+
+  // Agrupar por usuario
+  const groups = {};
+  docs.forEach(d => {
+    if (!groups[d._userId]) groups[d._userId] = {name: d._userName, docs: []};
+    groups[d._userId].docs.push(d);
+  });
+
+  let html = '';
+  for (const group of Object.values(groups)) {
+    const photos = group.docs.filter(isPhoto);
+    const pdfs   = group.docs.filter(d => !isPhoto(d));
+
+    html += `<div class="form-card mb-4">
+      <div class="d-flex align-items-center gap-2 mb-3">
+        <i class="bi bi-person-circle fs-5 text-primary"></i>
+        <span class="fw-semibold">${esc(group.name)}</span>
+        <span class="badge bg-light text-dark ms-1">${group.docs.length} archivo${group.docs.length!==1?'s':''}</span>
+      </div>`;
+
+    if (photos.length) {
+      html += `<div class="photo-grid mb-3">`;
+      for (const d of photos) {
+        html += `<div class="photo-thumb">
+          <img src="data:${d.mimeType};base64,${d.data}" loading="lazy">
+          <div class="ph-name">${esc(d.filename)}</div>
+          <div class="ph-overlay">
+            <button class="btn btn-sm btn-light" onclick="downloadCloudDoc('${d.id}')" title="Descargar">
+              <i class="bi bi-download"></i>
+            </button>
+          </div>
+        </div>`;
+      }
+      html += `</div>`;
+    }
+
+    if (pdfs.length) {
+      html += pdfs.map(d => `<div class="doc-item">
+        <i class="bi bi-file-earmark-pdf doc-icon pdf fs-3"></i>
+        <div class="doc-info">
+          <div class="doc-name">${esc(d.filename)}</div>
+          <div class="doc-meta">
+            ${d.category?`<span class="badge bg-light text-dark me-1">${esc(d.category)}</span>`:''}
+            ${esc(d.description||'')} · ${fmtSize(d.size)} · ${fmtDate(d.uploadedAt)}
+          </div>
+        </div>
+        <button class="btn btn-primary btn-sm flex-shrink-0" onclick="downloadCloudDoc('${d.id}')">
+          <i class="bi bi-download me-1"></i>Descargar
+        </button>
+      </div>`).join('');
+    }
+
+    html += `</div>`;
+  }
+
+  c.innerHTML = html;
 }
 
 function importUserProfile(e) {
