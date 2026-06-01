@@ -1864,27 +1864,47 @@ function confirmDeleteUser(userId) {
   const users = JSON.parse(localStorage.getItem('amio_users') || '[]');
   const u = users.find(x => x.id === userId);
   if (!u) return;
-  showConfirm(`¿Eliminar al usuario "${u.displayName}"?`, async () => {
-    // 1. Quitar del caché local inmediatamente
-    localStorage.setItem('amio_users', JSON.stringify(users.filter(x => x.id !== userId)));
 
-    // 2. Borrar de Firebase con feedback real del resultado
+  // Borrar TODAS las entradas con el mismo email (elimina duplicados de golpe)
+  const email  = (u.email || '').toLowerCase().trim();
+  const allIds = email
+    ? users.filter(x => (x.email || '').toLowerCase().trim() === email).map(x => x.id)
+    : [userId];
+  const nombre = u.displayName || u.email || userId;
+  const extra  = allIds.length > 1 ? ` (+${allIds.length - 1} duplicado(s) con el mismo email)` : '';
+
+  showConfirm(`¿Eliminar a "${nombre}"${extra}?`, async () => {
+    // 1. Quitar del caché local (todas las entradas)
+    localStorage.setItem('amio_users', JSON.stringify(
+      users.filter(x => !allIds.includes(x.id))
+    ));
+
+    // 2. Borrar de Firebase — todas las IDs encontradas
     if (db && _isConnected) {
-      try {
-        await fbTimeout(db.ref('usuarios/' + userId).remove(), 8000);
-        toast('✅ Usuario eliminado');
-      } catch(e) {
-        const isPerm = e.code === 'PERMISSION_DENIED' || String(e.message).toLowerCase().includes('permission');
-        if (isPerm) {
-          toast('⚠️ Firebase bloqueó el borrado — ve a Firebase Console → Realtime Database → Reglas y añade ".write": true', 'error');
-        } else {
-          toast('⚠️ Error al borrar de Firebase: ' + (e.code || e.message), 'error');
+      let ok = 0, fail = 0, permError = false;
+      for (const id of allIds) {
+        try {
+          await fbTimeout(db.ref('usuarios/' + id).remove(), 8000);
+          ok++;
+        } catch(e) {
+          fail++;
+          if (!permError && (e.code === 'PERMISSION_DENIED' || String(e.message).toLowerCase().includes('permission'))) {
+            permError = true;
+          }
         }
-        // Revertir el borrado local si Firebase falla para mantener consistencia
-        users.find(x => x.id === userId) && localStorage.setItem('amio_users', JSON.stringify(users));
+      }
+
+      if (fail === 0) {
+        toast(`✅ "${nombre}" eliminado${ok > 1 ? ` (${ok} entradas)` : ''}`);
+      } else if (permError) {
+        // Revertir caché local — no se borró de Firebase
+        localStorage.setItem('amio_users', JSON.stringify(users));
+        toast('⚠️ Firebase bloqueó el borrado. Ve a Firebase Console → Realtime Database → Reglas y pon ".write": true en la raíz', 'error');
+      } else {
+        toast(`⚠️ ${ok} borrado(s), ${fail} con error — pulsa Actualizar`, 'error');
       }
     } else {
-      toast('Usuario eliminado del caché local (sin conexión a Firebase)');
+      toast(`"${nombre}" eliminado del caché local (sin conexión a Firebase)`);
     }
 
     loadUsuarios();
