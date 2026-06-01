@@ -716,17 +716,12 @@ function startUsersListener() {
   if (_unsubUsers) _unsubUsers();
   const ref = db.ref('usuarios');
   ref.on('value', snapshot => {
-    setCloudStatus(true); // confirmamos conexión real al recibir datos
+    setCloudStatus(true);
     const usersObj = snapshot.val() || {};
     const cloudUsers = Object.values(usersObj);
-    const local = JSON.parse(localStorage.getItem('amio_users') || '[]');
-    const merged = [...local];
-    for (const cu of cloudUsers) {
-      const idx = merged.findIndex(u => u.id === cu.id);
-      if (idx >= 0) Object.assign(merged[idx], cu);
-      else merged.push(cu);
-    }
-    localStorage.setItem('amio_users', JSON.stringify(merged));
+    // REEMPLAZAR (no fusionar) — la nube es la fuente de verdad.
+    // El merge anterior re-añadía usuarios ya borrados desde el caché local.
+    localStorage.setItem('amio_users', JSON.stringify(cloudUsers));
     const badge = document.getElementById('userBadge');
     if (badge) badge.textContent = merged.length || '';
     const v = document.getElementById('viewUsuarios');
@@ -1870,11 +1865,29 @@ function confirmDeleteUser(userId) {
   const u = users.find(x => x.id === userId);
   if (!u) return;
   showConfirm(`¿Eliminar al usuario "${u.displayName}"?`, async () => {
+    // 1. Quitar del caché local inmediatamente
     localStorage.setItem('amio_users', JSON.stringify(users.filter(x => x.id !== userId)));
+
+    // 2. Borrar de Firebase con feedback real del resultado
     if (db && _isConnected) {
-      try { await fbTimeout(db.ref('usuarios/' + userId).remove(), 5000); } catch(e) {}
+      try {
+        await fbTimeout(db.ref('usuarios/' + userId).remove(), 8000);
+        toast('✅ Usuario eliminado');
+      } catch(e) {
+        const isPerm = e.code === 'PERMISSION_DENIED' || String(e.message).toLowerCase().includes('permission');
+        if (isPerm) {
+          toast('⚠️ Firebase bloqueó el borrado — ve a Firebase Console → Realtime Database → Reglas y añade ".write": true', 'error');
+        } else {
+          toast('⚠️ Error al borrar de Firebase: ' + (e.code || e.message), 'error');
+        }
+        // Revertir el borrado local si Firebase falla para mantener consistencia
+        users.find(x => x.id === userId) && localStorage.setItem('amio_users', JSON.stringify(users));
+      }
+    } else {
+      toast('Usuario eliminado del caché local (sin conexión a Firebase)');
     }
-    toast('Usuario eliminado'); loadUsuarios();
+
+    loadUsuarios();
   });
 }
 
