@@ -1,13 +1,10 @@
-// APP MIO — Service Worker v1
-// Permite instalar la app en móvil y funcionar offline básico
+// APP MIO — Service Worker v2
+// v2: HTML en network-first para recibir siempre el código más reciente
 
-const CACHE = 'app-mio-v1';
+const CACHE = 'app-mio-v2';
 
-// Archivos propios a pre-cachear al instalar
+// Archivos estáticos (iconos, manifests) — cache-first
 const PRECACHE = [
-  '/app-mio/',
-  '/app-mio/index.html',
-  '/app-mio/usuario.html',
   '/app-mio/manifest-admin.json',
   '/app-mio/manifest-user.json',
   '/app-mio/icons/icon-192.png',
@@ -16,7 +13,14 @@ const PRECACHE = [
   '/app-mio/icons/user-512.png',
 ];
 
-// Dominios externos que siempre van a la red (Firebase, CDNs)
+// Archivos HTML — network-first (siempre la versión más reciente)
+const NETWORK_FIRST = [
+  '/app-mio/',
+  '/app-mio/index.html',
+  '/app-mio/usuario.html',
+];
+
+// Dominios externos → siempre red
 const NETWORK_ONLY = [
   'firebase',
   'googleapis',
@@ -32,14 +36,12 @@ const NETWORK_ONLY = [
 // ── INSTALL ──────────────────────────────────────────────────
 self.addEventListener('install', e => {
   e.waitUntil(
-    caches.open(CACHE)
-      .then(c => c.addAll(PRECACHE))
-      .catch(() => {}) // no bloquear si falla algún recurso
+    caches.open(CACHE).then(c => c.addAll(PRECACHE)).catch(() => {})
   );
   self.skipWaiting();
 });
 
-// ── ACTIVATE — limpiar caches viejas ─────────────────────────
+// ── ACTIVATE — limpiar caches antiguas ───────────────────────
 self.addEventListener('activate', e => {
   e.waitUntil(
     caches.keys().then(keys =>
@@ -55,20 +57,36 @@ self.addEventListener('fetch', e => {
 
   const url = e.request.url;
 
-  // Recursos externos → solo red
+  // Recursos externos → solo red, sin interceptar
   if (NETWORK_ONLY.some(d => url.includes(d))) return;
 
-  // Recursos propios → caché primero, luego red
+  // HTML → network-first (código siempre actualizado)
+  const isHtml = NETWORK_FIRST.some(p => url.endsWith(p) || url.includes(p));
+  if (isHtml) {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          if (res && res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE).then(c => c.put(e.request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(e.request)) // sin red → caché como fallback
+    );
+    return;
+  }
+
+  // Resto → cache-first
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;
-      return fetch(e.request).then(response => {
-        if (response && response.ok && response.type === 'basic') {
-          const clone = response.clone();
-          caches.open(CACHE).then(c => c.put(e.request, clone));
+      return fetch(e.request).then(res => {
+        if (res && res.ok && res.type === 'basic') {
+          caches.open(CACHE).then(c => c.put(e.request, res.clone()));
         }
-        return response;
-      }).catch(() => cached); // sin conexión → devuelve caché si existe
+        return res;
+      }).catch(() => cached);
     })
   );
 });
