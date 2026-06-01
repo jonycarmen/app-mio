@@ -94,6 +94,9 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 .doc-name { font-weight: 500; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .doc-meta { font-size: .78rem; color: #64748b; }
 
+/* LIVE PULSE ANIMATION */
+@keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
+
 /* PHOTO GRID (docs modal) */
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: .6rem; padding: .75rem; }
 .photo-thumb { position: relative; border-radius: 10px; overflow: hidden; aspect-ratio: 1; background: #f1f5f9; }
@@ -464,12 +467,17 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
     <div id="viewAllDocs" style="display:none">
       <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
         <div>
-          <h4 class="fw-bold mb-0">Documentos de clientes</h4>
-          <p class="text-muted small mb-0">Todos los archivos subidos desde el portal de usuario</p>
+          <h4 class="fw-bold mb-0">
+            Documentos de clientes
+            <span id="allDocsLiveBadge" style="display:none;font-size:.65rem;vertical-align:middle" class="badge bg-success ms-2">
+              <span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:#fff;margin-right:4px;animation:pulse 1.4s infinite"></span>En vivo
+            </span>
+          </h4>
+          <p class="text-muted small mb-0">Se actualiza automáticamente cuando los clientes suben archivos</p>
         </div>
         <div class="d-flex gap-2 flex-wrap">
           <button class="btn btn-primary btn-sm" onclick="loadAllDocs()">
-            <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
+            <i class="bi bi-arrow-clockwise me-1"></i>Reconectar
           </button>
           <div class="btn-group btn-group-sm">
             <button class="btn btn-outline-secondary active" id="allDocsFilter_all" onclick="filterAllDocs('all')">Todos</button>
@@ -875,6 +883,9 @@ function togglePass() {
 
 // ── NAVIGATION ────────────────────────────────────────────
 function navigate(view, id=null) {
+  // Desconectar listener de documentos al salir de esa sección
+  if (view !== 'allDocs' && _unsubAllDocs) { _unsubAllDocs(); _unsubAllDocs = null; _allDocsLoaded = false; }
+
   ['viewPeopleList','viewPersonForm','viewPersonDetail','viewSettings','viewUsuarios','viewAllDocs']
     .forEach(v => document.getElementById(v).style.display='none');
   document.querySelectorAll('.sidebar-nav .nav-link')
@@ -2023,11 +2034,61 @@ function downloadCloudDoc(docId) {
 let _allDocsCache  = [];
 let _allDocsFilter = 'all';
 let _allDocsLoaded = false;
+let _unsubAllDocs  = null;   // función para desactivar el listener en tiempo real
 
-async function loadAllDocs() {
-  _allDocsLoaded = false;
+function _setAllDocsLive(active) {
+  const badge = document.getElementById('allDocsLiveBadge');
+  if (badge) badge.style.display = active ? '' : 'none';
+}
+
+function _processAllDocsSnap(snap) {
   const c = document.getElementById('allDocsContainer');
-  c.innerHTML = '<div class="text-center text-muted py-5"><div class="spinner-border mb-2"></div><div>Cargando documentos de la nube...</div></div>';
+  if (!c) return; // ya no estamos en la vista
+
+  if (!snap.exists()) {
+    _allDocsLoaded = false;
+    _setAllDocsLive(false);
+    c.innerHTML = `<div class="empty-state"><i class="bi bi-folder2-open"></i>
+      <div>Ningún cliente ha subido documentos aún</div>
+      <div class="small text-muted mt-1">Se actualizará solo cuando los clientes suban archivos</div></div>`;
+    return;
+  }
+
+  const rootVal = snap.val() || {};
+  const users   = JSON.parse(localStorage.getItem('amio_users') || '[]');
+  const nameOf  = id => {
+    const u = users.find(u => u.id === id);
+    return u ? (u.displayName || u.email || id) : id;
+  };
+
+  _allDocsCache = [];
+  for (const [userId, userDocsObj] of Object.entries(rootVal)) {
+    if (!userDocsObj || typeof userDocsObj !== 'object') continue;
+    const userName = nameOf(userId);
+    for (const [, doc] of Object.entries(userDocsObj)) {
+      if (!doc || typeof doc !== 'object' || !doc.id) continue;
+      _allDocsCache.push({...doc, _userName: userName, _userId: userId});
+    }
+  }
+
+  _allDocsCache.sort((a, b) => (b.uploadedAt || '').localeCompare(a.uploadedAt || ''));
+
+  const badge = document.getElementById('allDocsBadge');
+  if (badge) badge.textContent = _allDocsCache.length || '';
+
+  _setAllDocsLive(true);
+  _allDocsLoaded = true;
+  renderAllDocs();
+}
+
+function loadAllDocs() {
+  // Desconectar listener anterior si existía
+  if (_unsubAllDocs) { _unsubAllDocs(); _unsubAllDocs = null; }
+  _allDocsLoaded = false;
+  _setAllDocsLive(false);
+
+  const c = document.getElementById('allDocsContainer');
+  c.innerHTML = '<div class="text-center text-muted py-5"><div class="spinner-border mb-2"></div><div>Conectando en tiempo real...</div></div>';
 
   if (!_isConnected || !db) {
     c.innerHTML = `<div class="alert alert-warning m-0">
@@ -2035,47 +2096,18 @@ async function loadAllDocs() {
     return;
   }
 
-  try {
-    const snap = await fbTimeout(db.ref('userDocuments').once('value'), 20000);
-
-    if (!snap.exists()) {
-      c.innerHTML = `<div class="empty-state"><i class="bi bi-folder2-open"></i>
-        <div>Ningún cliente ha subido documentos aún</div>
-        <div class="small text-muted mt-1">Los documentos se sincronizan automáticamente cuando los clientes abren su portal</div></div>`;
-      return;
+  // Listener en tiempo real — se dispara al conectar y cada vez que hay cambios
+  const ref = db.ref('userDocuments');
+  ref.on('value',
+    snap => _processAllDocsSnap(snap),
+    err  => {
+      _setAllDocsLive(false);
+      const c2 = document.getElementById('allDocsContainer');
+      if (c2) c2.innerHTML = `<div class="alert alert-danger m-0">
+        <i class="bi bi-exclamation-triangle me-2"></i>Error: ${err.code || err.message}</div>`;
     }
-
-    // Usar val() + Object.entries() — más fiable que forEach() con datos grandes
-    const rootVal = snap.val() || {};
-    const users   = JSON.parse(localStorage.getItem('amio_users') || '[]');
-    const nameOf  = id => {
-      const u = users.find(u => u.id === id);
-      return u ? (u.displayName || u.email || id) : id;
-    };
-
-    _allDocsCache = [];
-    for (const [userId, userDocsObj] of Object.entries(rootVal)) {
-      if (!userDocsObj || typeof userDocsObj !== 'object') continue;
-      const userName = nameOf(userId);
-      for (const [, doc] of Object.entries(userDocsObj)) {
-        if (!doc || typeof doc !== 'object' || !doc.id) continue;
-        _allDocsCache.push({...doc, _userName: userName, _userId: userId});
-      }
-    }
-
-    // Más recientes primero
-    _allDocsCache.sort((a, b) => (b.uploadedAt || '').localeCompare(a.uploadedAt || ''));
-
-    // Badge del menú
-    const badge = document.getElementById('allDocsBadge');
-    if (badge) badge.textContent = _allDocsCache.length || '';
-
-    _allDocsLoaded = true;
-    renderAllDocs();
-  } catch(e) {
-    c.innerHTML = `<div class="alert alert-danger m-0">
-      <i class="bi bi-exclamation-triangle me-2"></i>Error al cargar: ${e.code || e.message}</div>`;
-  }
+  );
+  _unsubAllDocs = () => ref.off();
 }
 
 function filterAllDocs(f) {
