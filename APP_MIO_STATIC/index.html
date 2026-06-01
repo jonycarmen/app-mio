@@ -436,6 +436,9 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
           <button class="btn btn-success btn-sm" onclick="syncAllUsers()">
             <i class="bi bi-arrow-repeat me-1"></i>Sincronizar → Panel
           </button>
+          <button class="btn btn-outline-danger btn-sm" onclick="deduplicateUsers()">
+            <i class="bi bi-intersect me-1"></i>Limpiar duplicados
+          </button>
           <button class="btn btn-warning btn-sm" onclick="diagnosticoFirebase()">
             <i class="bi bi-bug me-1"></i>Diagnóstico
           </button>
@@ -1855,10 +1858,71 @@ function confirmDeleteUser(userId) {
   const users = JSON.parse(localStorage.getItem('amio_users') || '[]');
   const u = users.find(x => x.id === userId);
   if (!u) return;
-  showConfirm(`¿Eliminar al usuario "${u.displayName}"?`, () => {
+  showConfirm(`¿Eliminar al usuario "${u.displayName}"?`, async () => {
     localStorage.setItem('amio_users', JSON.stringify(users.filter(x => x.id !== userId)));
+    if (db && _isConnected) {
+      try { await fbTimeout(db.ref('usuarios/' + userId).remove(), 5000); } catch(e) {}
+    }
     toast('Usuario eliminado'); loadUsuarios();
   });
+}
+
+// ── LIMPIAR DUPLICADOS ────────────────────────────────────
+async function deduplicateUsers() {
+  // Carga fresca desde Firebase si hay conexión
+  let users = JSON.parse(localStorage.getItem('amio_users') || '[]');
+  if (!users.length) { toast('No hay usuarios en la lista', 'error'); return; }
+
+  // Agrupar por email (case-insensitive); sin email → usar id como clave única
+  const byEmail = {};
+  users.forEach(u => {
+    const key = (u.email || '').toLowerCase().trim() || ('__noemail__' + u.id);
+    if (!byEmail[key]) byEmail[key] = [];
+    byEmail[key].push(u);
+  });
+
+  const toDelete = [];
+  const toKeep   = [];
+
+  for (const group of Object.values(byEmail)) {
+    if (group.length === 1) { toKeep.push(group[0]); continue; }
+    // Ordenar: más reciente primero (updatedAt > createdAt > id como fallback)
+    group.sort((a, b) => {
+      const ta = new Date(a.updatedAt || a.createdAt || 0).getTime();
+      const tb = new Date(b.updatedAt || b.createdAt || 0).getTime();
+      return tb - ta;
+    });
+    toKeep.push(group[0]);                           // conservar el más reciente
+    group.slice(1).forEach(u => toDelete.push(u.id)); // marcar los demás para borrar
+  }
+
+  if (!toDelete.length) {
+    toast('✅ Sin duplicados — todos los usuarios son únicos'); return;
+  }
+
+  showConfirm(
+    `Se encontraron ${toDelete.length} registro(s) duplicado(s).\n¿Eliminarlos y dejar solo el más reciente de cada usuario?`,
+    async () => {
+      // 1. Actualizar localStorage
+      localStorage.setItem('amio_users', JSON.stringify(toKeep));
+
+      // 2. Borrar de Firebase
+      let fbOk = 0;
+      if (db && _isConnected) {
+        for (const id of toDelete) {
+          try {
+            await fbTimeout(db.ref('usuarios/' + id).remove(), 5000);
+            fbOk++;
+          } catch(e) { console.warn('dedup Firebase:', id, e.message); }
+        }
+        toast(`✅ ${toDelete.length} duplicado(s) eliminado(s) — ${fbOk} borrados en Firebase`);
+      } else {
+        toast(`✅ ${toDelete.length} duplicado(s) eliminados localmente. Reconecta para limpiar Firebase también.`);
+      }
+
+      loadUsuarios();
+    }
+  );
 }
 
 window._currentUserDocs = {};
