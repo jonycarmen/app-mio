@@ -540,8 +540,12 @@ function fbTimeout(promise, ms = 8000) {
 async function syncToCloud(user) {
   if (!db) return false;
   try {
-    const {passwordHash:_, ...safe} = user;
-    await fbTimeout(db.ref('usuarios/' + user.id).set({...safe, updatedAt: new Date().toISOString()}), 8000);
+    // Incluimos passwordHash (SHA-256, irreversible) para que el login
+    // funcione desde cualquier dispositivo o navegador
+    await fbTimeout(db.ref('usuarios/' + user.id).set({
+      ...user,
+      updatedAt: new Date().toISOString()
+    }), 8000);
     return true;
   } catch(e) {
     console.warn('Error al sincronizar con la nube:', e.code || e.message);
@@ -739,7 +743,7 @@ async function doLogin() {
   let users   = getUsers();
   let user    = users.find(u => u.email===email && u.passwordHash===hash);
 
-  // Si la contraseña local no coincide, comprobar si el admin la reseteó en Firebase
+  // PASO 1 — Comprobar si el admin reseteó la contraseña en Firebase
   if (!user && db) {
     try {
       const emailKey = email.replace(/[^a-z0-9]/g, '_');
@@ -747,24 +751,60 @@ async function doLogin() {
       if (snap.exists()) {
         const reset = snap.val();
         if (reset.hash === hash) {
-          // Contraseña temporal correcta — actualizar hash local
           const idx = users.findIndex(u => u.email === email);
           if (idx >= 0) {
-            users[idx].passwordHash    = hash;
+            users[idx].passwordHash       = hash;
             users[idx].needsPasswordReset = true;
-            users[idx].updatedAt       = new Date().toISOString();
+            users[idx].updatedAt          = new Date().toISOString();
             saveUsers(users);
             user = users[idx];
-            // Borrar el reset de Firebase
             fbTimeout(db.ref('password_resets/' + emailKey).remove(), 5000).catch(() => {});
           }
         }
       }
-    } catch(e) { /* silencioso — el login local ya mostró error si corresponde */ }
+    } catch(e) { /* silencioso */ }
+  }
+
+  // PASO 2 — Buscar en Firebase si no está en este dispositivo/navegador
+  // (registro hecho en otro dispositivo o navegador diferente)
+  if (!user && db) {
+    try {
+      err.textContent = '🔍 Verificando credenciales en la nube…';
+      err.className   = 'alert alert-info py-2 small mb-3';
+      err.classList.remove('d-none');
+
+      const snap = await fbTimeout(
+        db.ref('usuarios').orderByChild('email').equalTo(email).once('value'),
+        8000
+      );
+
+      if (snap.exists()) {
+        snap.forEach(child => {
+          const u = child.val();
+          if (u && u.passwordHash === hash && !user) {
+            user = u;
+          }
+        });
+      }
+
+      if (user) {
+        // Guardar en localStorage para futuras sesiones sin conexión
+        const localUsers = getUsers();
+        const idx = localUsers.findIndex(x => x.id === user.id);
+        if (idx >= 0) localUsers[idx] = {...localUsers[idx], ...user};
+        else          localUsers.push(user);
+        saveUsers(localUsers);
+        users = localUsers;
+      }
+    } catch(e) { console.warn('Firebase login check:', e.message); }
+
+    err.classList.add('d-none');
+    err.className = 'alert alert-danger d-none py-2 small mb-3';
   }
 
   if (!user) {
     err.textContent = 'Email o contraseña incorrectos.';
+    err.className   = 'alert alert-danger py-2 small mb-3';
     err.classList.remove('d-none'); return;
   }
   err.classList.add('d-none');
