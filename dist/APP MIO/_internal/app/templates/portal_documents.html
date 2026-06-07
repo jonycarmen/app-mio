@@ -1,0 +1,63 @@
+{% extends "portal_base.html" %}
+{% block title %}Mis Documentos{% endblock %}
+{% set active_page = 'documents' %}
+{% block content %}
+<div class="page-header" style="margin-bottom:1.5rem;">
+    <div>
+        <h1>Mis Documentos</h1>
+        <p class="page-header-sub">{{ documents|length }} documento{% if documents|length != 1 %}s{% endif %} subido{% if documents|length != 1 %}s{% endif %}</p>
+    </div>
+</div>
+
+{% if error %}<div class="alert-error">{{ error }}</div>{% endif %}
+{% if success %}<div class="alert-success">{{ success }}</div>{% endif %}
+
+<div class="portal-card">
+    <div class="portal-card-title">Subir nuevo documento</div>
+    <form method="POST" action="/portal/documents" enctype="multipart/form-data"
+          style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:.75rem;align-items:end;">
+        <label class="field" style="grid-column:1/-1;">
+            Archivo (PDF)
+            <input type="file" name="file" accept="application/pdf" required>
+        </label>
+        <label class="field">
+            Categoría
+            <input type="text" name="category" placeholder="Ej. contrato, nómina…">
+        </label>
+        <label class="field">
+            Descripción
+            <input type="text" name="description" placeholder="Descripción opcional">
+        </label>
+        <div>
+            <button type="submit" class="btn-accent">Subir</button>
+        </div>
+    </form>
+</div>
+
+<div class="table-wrap">
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Archivo</th>
+                <th>Categoría</th>
+                <th>Descripción</th>
+                <th>Tamaño</th>
+                <th>Subido</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for doc in documents %}
+            <tr>
+                <td style="font-weight:600;">{{ doc.original_filename }}</td>
+                <td>{{ doc.category or '—' }}</td>
+                <td>{{ doc.description or '—' }}</td>
+                <td>{{ (doc.file_size / 1024)|round(1) }} KB</td>
+                <td style="color:#64748b;font-size:.82rem;">{{ doc.uploaded_at.strftime('%d/%m/%Y') if doc.uploaded_at else '—' }}</td>
+            </tr>
+            {% else %}
+            <tr><td colspan="5" class="empty-state" style="color:#64748b;">No has subido documentos todavía.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

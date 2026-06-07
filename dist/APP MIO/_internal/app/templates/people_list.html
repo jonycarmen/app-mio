@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}Listado de personas{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>Personas</h1>
+        <p class="page-header-sub">{{ people|length }} persona{% if people|length != 1 %}s{% endif %} registrada{% if people|length != 1 %}s{% endif %}</p>
+    </div>
+    <div class="page-header-actions">
+        <form method="GET" action="/people" id="searchForm" class="search-bar" style="display:flex;gap:.4rem;align-items:center;">
+            <input id="searchInput" name="q" type="search"
+                   placeholder="Nombre, DNI, pasaporte, IBAN o wallet…"
+                   value="{{ q }}"
+                   autocomplete="off">
+            <button type="submit" class="button btn-sm">Buscar</button>
+            {% if q %}
+            <a href="/people" class="button btn-sm btn-muted" title="Limpiar búsqueda">✕</a>
+            {% endif %}
+        </form>
+        <a href="/people/new" class="button btn-success">+ Nueva persona</a>
+    </div>
+</section>
+{% if q %}
+<p style="margin:.25rem 0 .75rem;font-size:.875em;color:var(--text-muted,#666);">
+    Búsqueda: <strong>{{ q }}</strong> — {{ people|length }} resultado{% if people|length != 1 %}s{% endif %}
+</p>
+{% endif %}
+
+<div class="table-wrap">
+    <table class="table" id="peopleTable">
+        <thead>
+            <tr>
+                <th>Nombre</th>
+                <th>DNI</th>
+                <th>Pasaporte</th>
+                <th>Nómina actual</th>
+                <th>PDFs</th>
+                <th>Acciones</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for person in people %}
+            <tr data-person-id="{{ person.id }}">
+                <td><a href="/people/{{ person.id }}" style="font-weight:600;">{{ person.full_name }}</a></td>
+                <td>{{ person.dni or "—" }}</td>
+                <td>{{ person.passport or "—" }}</td>
+                <td>
+                    {% if person.current_payroll %}
+                    <span class="badge badge-success">{{ person.current_payroll.amount }} €</span>
+                    {% else %}
+                    <span class="badge badge-muted">—</span>
+                    {% endif %}
+                </td>
+                <td>
+                    {% if person.document_count %}
+                    <span class="badge badge-primary">{{ person.document_count }}</span>
+                    {% else %}
+                    <span style="color:var(--text-muted)">0</span>
+                    {% endif %}
+                </td>
+                <td class="actions">
+                    <a href="/people/{{ person.id }}" class="button btn-sm btn-info">Ver</a>
+                    <a href="/people/{{ person.id }}/edit" class="button btn-sm">Editar</a>
+                    <button class="button btn-sm btn-danger" onclick="deletePersonRow({{ person.id }}, '{{ person.full_name|replace("'", "\\'") }}', this)">Eliminar</button>
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="6" class="empty-state">{% if q %}No se encontraron personas para "{{ q }}".{% else %}No hay personas registradas aún.{% endif %}</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<script src="/static/js/people.js"></script>
+{% endblock %}

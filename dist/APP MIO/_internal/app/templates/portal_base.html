@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Mi Portal">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.svg">
+    <title>{% block title %}Mi Portal{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/app.css">
+    {% set _s = request.state.app_settings if request.state is defined and request.state.app_settings is defined else None %}
+    <style>
+        :root {
+            --user-primary: {{ user.theme_color or '#3563e9' }};
+            {% if _s %}
+            --primary: {{ _s.primary_color or '#6366f1' }};
+            --secondary: {{ _s.secondary_color or '#3563e9' }};
+            {% endif %}
+        }
+        body { background:#0f172a; color:#e2e8f0; min-height:100vh; min-height:100dvh; }
+
+        /* Sidebar */
+        .portal-layout { display:flex; min-height:100vh; min-height:100dvh; }
+        .portal-sidebar {
+            width:240px; flex-shrink:0;
+            background:#1e293b;
+            border-right:1px solid #334155;
+            display:flex; flex-direction:column;
+            position:sticky; top:0; height:100vh;
+            overflow-y:auto;
+        }
+        .sidebar-brand {
+            padding:1.25rem 1.25rem .9rem;
+            border-bottom:1px solid #334155;
+        }
+        .sidebar-brand .brand-name {
+            font-size:1rem; font-weight:700; color:#f1f5f9;
+            display:block; margin-bottom:.15rem;
+        }
+        .sidebar-brand .brand-sub {
+            font-size:.72rem; color:#64748b;
+        }
+
+        /* Avatar */
+        .sidebar-user {
+            display:flex; flex-direction:column; align-items:center;
+            padding:1.25rem 1rem;
+            border-bottom:1px solid #334155;
+            gap:.5rem;
+        }
+        .avatar {
+            width:56px; height:56px;
+            border-radius:50%;
+            background: var(--user-primary);
+            display:flex; align-items:center; justify-content:center;
+            font-size:1.35rem; font-weight:700; color:#fff;
+            overflow:hidden; flex-shrink:0;
+        }
+        .avatar img { width:100%; height:100%; object-fit:cover; }
+        .sidebar-user .user-name { font-size:.9rem; font-weight:600; color:#e2e8f0; text-align:center; }
+        .sidebar-user .user-email { font-size:.75rem; color:#64748b; text-align:center; word-break:break-all; }
+
+        /* Nav */
+        .sidebar-nav { flex:1; padding:.75rem 0; }
+        .nav-item {
+            display:flex; align-items:center; gap:.6rem;
+            padding:.62rem 1.25rem;
+            color:#94a3b8;
+            font-size:.875rem; font-weight:500;
+            text-decoration:none;
+            border-left:3px solid transparent;
+            transition:all .15s;
+            min-height:44px;
+        }
+        .nav-item:hover { color:#e2e8f0; background:rgba(255,255,255,.04); text-decoration:none; }
+        .nav-item.active {
+            color:#fff;
+            background:rgba(255,255,255,.07);
+            border-left-color: var(--user-primary);
+        }
+        .nav-icon { font-size:1rem; width:20px; text-align:center; }
+        .nav-logout { margin-top:auto; }
+        .sidebar-footer { padding:.75rem 1.25rem 1.25rem; border-top:1px solid #334155; }
+
+        /* Main content */
+        .portal-main { flex:1; min-width:0; padding:1.75rem 2rem; }
+
+        /* Cards inside portal */
+        .portal-card {
+            background:#1e293b;
+            border:1px solid #334155;
+            border-radius:12px;
+            padding:1.4rem 1.5rem;
+            margin-bottom:1.25rem;
+        }
+        .portal-card-title {
+            font-size:1rem; font-weight:600; color:#e2e8f0;
+            margin-bottom:1rem;
+            display:flex; justify-content:space-between; align-items:center;
+            border-bottom:1px solid #334155; padding-bottom:.75rem;
+        }
+
+        /* Form inputs inside portal */
+        .portal-main input[type="text"],
+        .portal-main input[type="email"],
+        .portal-main input[type="password"],
+        .portal-main input[type="tel"],
+        .portal-main input[type="number"],
+        .portal-main input[type="color"],
+        .portal-main textarea,
+        .portal-main select {
+            background:#0f172a; color:#e2e8f0; border-color:#334155;
+        }
+        .portal-main input:focus, .portal-main textarea:focus, .portal-main select:focus {
+            border-color: var(--user-primary);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--user-primary) 25%, transparent);
+        }
+        .portal-main label.field { color:#94a3b8; }
+        .portal-main .field input { background:#0f172a; color:#e2e8f0; border-color:#334155; }
+
+        /* Alert boxes */
+        .alert-success { background:rgba(34,197,94,.12); border:1px solid rgba(34,197,94,.3); border-radius:8px; padding:.65rem 1rem; margin-bottom:1rem; color:#86efac; font-size:.88rem; }
+        .alert-error   { background:rgba(239,68,68,.12);  border:1px solid rgba(239,68,68,.3);  border-radius:8px; padding:.65rem 1rem; margin-bottom:1rem; color:#fca5a5; font-size:.88rem; }
+
+        /* Table inside portal */
+        .portal-main .table thead tr { background:#0f172a; }
+        .portal-main .table th { color:#64748b; border-bottom-color:#334155; }
+        .portal-main .table td { border-bottom-color:#1e293b; color:#cbd5e1; }
+        .portal-main .table tbody tr:hover { background:#1e293b44; }
+        .portal-main .table-wrap { background:#1e293b; border-color:#334155; }
+
+        /* Page header */
+        .portal-main .page-header h1 { color:#f1f5f9; }
+        .portal-main .page-header-sub { color:#64748b; }
+
+        /* Badge */
+        .portal-main .badge-primary { background:#1e3a8a; color:#93c5fd; }
+        .portal-main .badge-success { background:#14532d; color:#86efac; }
+        .portal-main .badge-muted   { background:#1e293b; color:#64748b; }
+
+        /* Accent button using user color */
+        .btn-accent {
+            background: var(--user-primary);
+            color:#fff; border:none; border-radius:8px;
+            padding:.55rem 1.1rem; font-size:.875rem; font-weight:600;
+            cursor:pointer; text-decoration:none; display:inline-flex; align-items:center; gap:.4rem;
+            transition:opacity .15s;
+            min-height:44px;
+        }
+        .btn-accent:hover { opacity:.88; text-decoration:none; color:#fff; }
+
+        /* Stat cards */
+        .stat-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:1rem; margin-bottom:1.5rem; }
+        .stat-card {
+            background:#1e293b; border:1px solid #334155; border-radius:12px;
+            padding:1.1rem 1.25rem;
+        }
+        .stat-label { font-size:.75rem; color:#64748b; font-weight:600; text-transform:uppercase; letter-spacing:.05em; margin-bottom:.35rem; }
+        .stat-value { font-size:1.6rem; font-weight:700; color:#f1f5f9; }
+        .stat-sub   { font-size:.78rem; color:#94a3b8; margin-top:.2rem; }
+
+        /* ── Mobile sidebar override ──────────────────────────── */
+        @media(max-width:768px) {
+            /* Sidebar becomes a fixed off-canvas drawer */
+            .portal-sidebar {
+                position: fixed;
+                top: 0; left: -100%;
+                width: min(280px, 88vw);
+                height: 100%;
+                z-index: 300;
+                transition: left .25s ease;
+                box-shadow: 4px 0 28px rgba(0,0,0,.5);
+                padding-top:    env(safe-area-inset-top, 0px);
+                padding-bottom: env(safe-area-inset-bottom, 0px);
+                overflow-y: auto;
+            }
+            .portal-sidebar.is-open { left: 0; }
+            .portal-main  { padding: .85rem .9rem; padding-bottom: calc(.85rem + env(safe-area-inset-bottom, 0px)); padding-top: 0; }
+            .portal-layout { flex-direction: column; }
+            /* Stat grid 2 cols on small mobile */
+            .stat-grid { grid-template-columns: repeat(2,1fr); }
+        }
+        @media(max-width:375px) {
+            .stat-grid { grid-template-columns: 1fr; }
+            .portal-card { padding:.85rem .9rem; }
+        }
+    </style>
+</head>
+<body>
+<div class="portal-layout">
+    <!-- Mobile topbar (visible ≤ 768px only) -->
+    <div class="portal-mobile-topbar" id="portal-mobile-topbar">
+        <span class="portal-mobile-brand">{{ _s.app_name if _s and _s.app_name else 'Mi Portal' }}</span>
+        <button class="hamburger" id="portal-hamburger" aria-label="Abrir menú" aria-expanded="false">
+            <span></span><span></span><span></span>
+        </button>
+    </div>
+
+    <!-- Sidebar -->
+    <aside class="portal-sidebar" id="portal-sidebar">
+        <div class="sidebar-brand">
+            {% if _s and _s.logo_path %}
+            <div style="display:flex;align-items:center;gap:.5rem;margin-bottom:.35rem;">
+                <img src="/branding/logo" alt="logo" style="height:24px;width:24px;object-fit:contain;border-radius:5px;">
+                <span class="brand-name">{{ _s.app_name if _s and _s.app_name else 'Mi Portal' }}</span>
+            </div>
+            {% else %}
+            <span class="brand-name">{{ _s.app_name if _s and _s.app_name else 'Mi Portal' }}</span>
+            {% endif %}
+            <span class="brand-sub">Espacio personal</span>
+        </div>
+
+        <div class="sidebar-user">
+            <div class="avatar">
+                {% if user.profile_photo_path %}
+                <img src="/portal/photo" alt="foto">
+                {% else %}
+                {{ user.display_name[0]|upper }}
+                {% endif %}
+            </div>
+            <span class="user-name">{{ user.display_name }}</span>
+            {% if user.email %}<span class="user-email">{{ user.email }}</span>{% endif %}
+        </div>
+
+        <nav class="sidebar-nav">
+            <a href="/portal/" class="nav-item {% if active_page == 'dashboard' %}active{% endif %}">
+                <span class="nav-icon">&#127968;</span> Inicio
+            </a>
+            <a href="/portal/profile" class="nav-item {% if active_page == 'profile' %}active{% endif %}">
+                <span class="nav-icon">&#128100;</span> Mi Perfil
+            </a>
+            <a href="/portal/customize" class="nav-item {% if active_page == 'customize' %}active{% endif %}">
+                <span class="nav-icon">&#127912;</span> Personalización
+            </a>
+            <a href="/portal/documents" class="nav-item {% if active_page == 'documents' %}active{% endif %}">
+                <span class="nav-icon">&#128196;</span> Mis Documentos
+            </a>
+            <a href="/portal/accounts" class="nav-item {% if active_page == 'accounts' %}active{% endif %}">
+                <span class="nav-icon">&#127970;</span> Mis Cuentas
+            </a>
+            <a href="/portal/payroll" class="nav-item {% if active_page == 'payroll' %}active{% endif %}">
+                <span class="nav-icon">&#128176;</span> Mi Nómina
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <a href="/user/logout" class="nav-item" style="border-left:none;padding-left:0;color:#ef4444;">
+                <span class="nav-icon">&#128682;</span> Cerrar sesión
+            </a>
+        </div>
+    </aside>
+
+    <!-- Mobile overlay backdrop -->
+    <div class="mobile-overlay" id="portal-overlay" role="presentation"></div>
+
+    <!-- Main content -->
+    <main class="portal-main">
+        {% block content %}{% endblock %}
+    </main>
+</div>
+
+<div id="toast-container"></div>
+<div id="modal-root"></div>
+
+<script>
+// ── CSRF helper ────────────────────────────────────────────────
+(function patchFetch() {
+  const _MUTATING = new Set(['POST','PUT','PATCH','DELETE']);
+  function getCsrfCookie() {
+    const m = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+    return m ? decodeURIComponent(m[1]) : null;
+  }
+  const _orig = window.fetch.bind(window);
+  window.fetch = function(input, init) {
+    init = init || {};
+    const method = (init.method || 'GET').toUpperCase();
+    if (_MUTATING.has(method)) {
+      const csrf = getCsrfCookie();
+      if (csrf) init.headers = Object.assign({'X-CSRF-Token': csrf}, init.headers || {});
+    }
+    return _orig(input, init);
+  };
+})();
+
+// ── Toast helper ───────────────────────────────────────────────
+function showToast(msg, type) {
+  type = type || 'success';
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + type;
+  t.textContent = msg;
+  c.appendChild(t);
+  setTimeout(function() { t.remove(); }, 3200);
+}
+
+// ── Confirm dialog ─────────────────────────────────────────────
+function confirmDialog(msg) {
+  return new Promise(function(resolve) {
+    const root = document.getElementById('modal-root');
+    root.innerHTML = '<div class="modal-overlay" id="modal-overlay"><div class="modal-box"><h3>Confirmar</h3><p>' + msg + '</p><div class="modal-actions"><button class="button btn-outline" id="modal-cancel">Cancelar</button><button class="button btn-danger" id="modal-confirm">Confirmar</button></div></div></div>';
+    document.getElementById('modal-cancel').onclick  = function() { root.innerHTML=''; resolve(false); };
+    document.getElementById('modal-confirm').onclick = function() { root.innerHTML=''; resolve(true);  };
+    document.getElementById('modal-overlay').onclick = function(e) { if(e.target===e.currentTarget){root.innerHTML=''; resolve(false);} };
+  });
+}
+
+// ── Portal sidebar toggle (mobile) ────────────────────────────
+(function() {
+  var hamburger = document.getElementById('portal-hamburger');
+  var sidebar   = document.getElementById('portal-sidebar');
+  var overlay   = document.getElementById('portal-overlay');
+  if (!hamburger) return;
+
+  function openSidebar() {
+    sidebar.classList.add('is-open');
+    overlay.classList.add('is-open');
+    hamburger.classList.add('is-open');
+    hamburger.setAttribute('aria-expanded','true');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeSidebar() {
+    sidebar.classList.remove('is-open');
+    overlay.classList.remove('is-open');
+    hamburger.classList.remove('is-open');
+    hamburger.setAttribute('aria-expanded','false');
+    document.body.style.overflow = '';
+  }
+  hamburger.addEventListener('click', function() {
+    sidebar.classList.contains('is-open') ? closeSidebar() : openSidebar();
+  });
+  overlay.addEventListener('click', closeSidebar);
+  // Close on nav link tap
+  sidebar.querySelectorAll('.nav-item').forEach(function(a) {
+    a.addEventListener('click', closeSidebar);
+  });
+})();
+
+// ── Auto data-label for responsive table cards ─────────────────
+(function() {
+  document.querySelectorAll('.table').forEach(function(table) {
+    var ths = Array.from(table.querySelectorAll('thead th')).map(function(th) { return th.textContent.trim(); });
+    table.querySelectorAll('tbody tr').forEach(function(row) {
+      row.querySelectorAll('td').forEach(function(td, i) {
+        if (ths[i] && !td.hasAttribute('colspan')) td.setAttribute('data-label', ths[i]);
+      });
+    });
+  });
+})();
+
+// ── iOS 100dvh polyfill ────────────────────────────────────────
+(function() {
+  function setVh() { document.documentElement.style.setProperty('--vh', window.innerHeight * .01 + 'px'); }
+  setVh();
+  window.addEventListener('resize', setVh);
+})();
+</script>
+</body>
+</html>

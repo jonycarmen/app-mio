@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block title %}{% if person %}Editar persona{% else %}Nueva persona{% endif %}{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>{% if person %}Editar persona{% else %}Nueva persona{% endif %}</h1>
+        {% if person %}<p class="page-header-sub">ID #{{ person.id }}</p>{% endif %}
+    </div>
+    {% if person %}
+    <div class="page-header-actions">
+        <a href="/people/{{ person.id }}" class="button btn-outline">← Cancelar</a>
+    </div>
+    {% else %}
+    <div class="page-header-actions">
+        <a href="/people" class="button btn-outline">← Cancelar</a>
+    </div>
+    {% endif %}
+</section>
+
+<div class="card">
+    <form id="personForm" data-person-id="{% if person %}{{ person.id }}{% endif %}">
+
+        <!-- Datos básicos -->
+        <div class="section-header" style="margin-top:0;">
+            <h2>Datos personales</h2>
+        </div>
+        <div class="grid" style="margin-bottom:1.5rem;">
+            <label class="field">Nombre completo *
+                <input type="text" name="full_name" value="{{ person.full_name if person else '' }}" required placeholder="Nombre y apellidos">
+            </label>
+            <label class="field">DNI
+                <input type="text" name="dni" value="{{ person.dni if person else '' }}" placeholder="Ej: 12345678A">
+            </label>
+            <label class="field">Pasaporte
+                <input type="text" name="passport" value="{{ person.passport if person else '' }}" placeholder="Ej: AB123456">
+            </label>
+        </div>
+
+        <!-- Cuentas bancarias -->
+        <div class="section-header">
+            <h2>Cuentas bancarias</h2>
+            <button type="button" class="button secondary btn-sm" onclick="addBankAccount()">+ Añadir cuenta</button>
+        </div>
+        <div id="bankAccounts">
+            {% if person and person.bank_accounts %}
+                {% for account in person.bank_accounts %}
+                <div class="repeatable bank-account">
+                    <input type="text" name="bank_name" placeholder="Banco" value="{{ account.bank_name or '' }}">
+                    <input type="text" name="iban" placeholder="IBAN" value="{{ account.iban or '' }}">
+                    <input type="text" name="account_number" placeholder="Número de cuenta" value="{{ account.account_number or '' }}">
+                    <input type="text" name="notes" placeholder="Notas" value="{{ account.notes or '' }}">
+                    <button type="button" class="btn-remove-row" onclick="removeRow(this)" title="Eliminar fila">✕</button>
+                </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <!-- Wallets -->
+        <div class="section-header">
+            <h2>Wallets</h2>
+            <button type="button" class="button secondary btn-sm" onclick="addWallet()">+ Añadir wallet</button>
+        </div>
+        <div id="wallets">
+            {% if person and person.wallet_addresses %}
+                {% for wallet in person.wallet_addresses %}
+                <div class="repeatable wallet">
+                    <input type="text" name="network" placeholder="Red (ej: ETH)" value="{{ wallet.network or '' }}">
+                    <input type="text" name="address" placeholder="Dirección" value="{{ wallet.address }}">
+                    <input type="text" name="label" placeholder="Etiqueta" value="{{ wallet.label or '' }}">
+                    <input type="text" name="wallet_notes" placeholder="Notas" value="{{ wallet.notes or '' }}">
+                    <button type="button" class="btn-remove-row" onclick="removeRow(this)" title="Eliminar fila">✕</button>
+                </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+
+        <div style="margin-top:2rem; display:flex; gap:.75rem;">
+            <button type="submit" class="button btn-success">Guardar cambios</button>
+            {% if person %}
+            <a href="/people/{{ person.id }}" class="button btn-outline">Cancelar</a>
+            {% else %}
+            <a href="/people" class="button btn-outline">Cancelar</a>
+            {% endif %}
+        </div>
+
+    </form>
+</div>
+
+<script src="/static/js/people.js"></script>
+{% endblock %}

@@ -1,0 +1,184 @@
+{% extends "base.html" %}
+{% block title %}{{ person.full_name }}{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>{{ person.full_name }}</h1>
+        <p class="page-header-sub">
+            {% if person.dni %}DNI: <strong>{{ person.dni }}</strong>{% endif %}
+            {% if person.dni and person.passport %} &nbsp;·&nbsp; {% endif %}
+            {% if person.passport %}Pasaporte: <strong>{{ person.passport }}</strong>{% endif %}
+        </p>
+    </div>
+    <div class="page-header-actions">
+        <a href="/people/{{ person.id }}/edit" class="button">Editar datos</a>
+        <button class="button btn-danger" onclick="deleteThisPerson({{ person.id }}, '{{ person.full_name|replace("'", "\\'") }}')">Eliminar persona</button>
+    </div>
+</section>
+
+<section class="card">
+    <div class="card-title">Enlace público self-service</div>
+    <div class="public-link-box">
+        <div>
+            <p class="page-header-sub">Comparte este enlace para que {{ person.full_name }} complete sus datos y suba PDFs desde cualquier dispositivo.</p>
+            <input
+                id="publicAccessLink"
+                class="public-link-input"
+                type="text"
+                readonly
+                value="{{ request.url_for('public_form', token=person.access_token) }}"
+            >
+        </div>
+        <div class="page-header-actions">
+            <button class="button btn-outline" type="button" onclick="copyPublicLink()">Copiar enlace</button>
+            <button class="button btn-warning" type="button" onclick="regeneratePublicLink({{ person.id }})">Regenerar token</button>
+        </div>
+    </div>
+</section>
+
+<div class="grid-detail">
+
+    <!-- Cuentas bancarias -->
+    <section class="card">
+        <div class="card-title">
+            Cuentas bancarias
+            <span class="badge badge-muted">{{ person.bank_accounts|length }}</span>
+        </div>
+        {% if person.bank_accounts %}
+        <ul class="item-list">
+            {% for account in person.bank_accounts %}
+            <li>
+                <div class="item-list-main">
+                    <div style="font-weight:600;">{{ account.bank_name or '—' }}</div>
+                    <div class="item-list-sub">{{ account.iban or account.account_number or '—' }}</div>
+                    {% if account.notes %}<div class="item-list-sub">{{ account.notes }}</div>{% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state">Sin cuentas bancarias</p>
+        {% endif %}
+    </section>
+
+    <!-- Wallets -->
+    <section class="card">
+        <div class="card-title">
+            Wallets
+            <span class="badge badge-muted">{{ person.wallet_addresses|length }}</span>
+        </div>
+        {% if person.wallet_addresses %}
+        <ul class="item-list">
+            {% for wallet in person.wallet_addresses %}
+            <li>
+                <div class="item-list-main">
+                    <div style="font-weight:600;">{{ wallet.network or '—' }}</div>
+                    <div class="item-list-sub" style="word-break:break-all;">{{ wallet.address }}</div>
+                    {% if wallet.label %}<div class="item-list-sub">{{ wallet.label }}</div>{% endif %}
+                </div>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state">Sin wallets</p>
+        {% endif %}
+    </section>
+
+    <!-- Documentos PDF -->
+    <section class="card">
+        <div class="card-title">Documentos PDF</div>
+        <form id="documentForm" data-person-id="{{ person.id }}" class="upload-form">
+            <label class="field">Archivo PDF
+                <input type="file" name="file" accept="application/pdf" required>
+            </label>
+            <div class="grid">
+                <label class="field">Categoría <input type="text" name="category" placeholder="Ej: contrato"></label>
+                <label class="field">Descripción <input type="text" name="description" placeholder="Breve descripción"></label>
+            </div>
+            <div><button type="submit" class="button btn-success btn-sm">Subir PDF</button></div>
+        </form>
+        {% if person.documents %}
+        <ul class="item-list" id="documentList">
+            {% for document in person.documents %}
+            <li id="doc-{{ document.id }}">
+                <div class="item-list-main">
+                    <a href="/api/documents/{{ document.id }}/file" target="_blank" style="font-weight:600;">{{ document.original_filename }}</a>
+                    {% if document.category %}<div class="item-list-sub">{{ document.category }}</div>{% endif %}
+                    {% if document.description %}<div class="item-list-sub">{{ document.description }}</div>{% endif %}
+                </div>
+                <button class="button btn-sm btn-danger" onclick="deleteDocument({{ document.id }}, '{{ document.original_filename|replace("'", "\\'") }}')">Eliminar</button>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state" id="docEmpty">Sin documentos</p>
+        {% endif %}
+    </section>
+
+    <!-- Nóminas -->
+    <section class="card">
+        <div class="card-title">Historial de nóminas</div>
+        <form id="payrollForm" data-person-id="{{ person.id }}" class="inline-form">
+            <label class="field">Importe (€) <input type="number" step="0.01" name="amount" placeholder="0.00" required></label>
+            <label class="field">Fecha <input type="date" name="effective_date" required></label>
+            <label class="field">Notas <input type="text" name="notes" placeholder="Opcional"></label>
+            <div style="padding-top:1.3rem"><button type="submit" class="button btn-success btn-sm">Registrar</button></div>
+        </form>
+        {% if payrolls %}
+        <ul class="item-list" id="payrollList">
+            {% for payroll in payrolls %}
+            <li id="payroll-{{ payroll.id }}">
+                <div class="item-list-main">
+                    <span style="font-weight:600;">{{ payroll.amount }} €</span>
+                    &nbsp;<span class="item-list-sub">{{ payroll.effective_date }}</span>
+                    {% if payroll.notes %}&nbsp;·&nbsp;<span class="item-list-sub">{{ payroll.notes }}</span>{% endif %}
+                </div>
+                <button class="button btn-sm btn-danger" onclick="deletePayroll({{ person.id }}, {{ payroll.id }})">Eliminar</button>
+            </li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="empty-state" id="payrollEmpty">Sin historial de nóminas</p>
+        {% endif %}
+    </section>
+
+</div>
+
+<script>
+  const PERSON_ID = {{ person.id }};
+  async function deleteThisPerson(id, name) {
+    const ok = await confirmDialog(`¿Eliminar a <strong>${name}</strong> y todos sus datos?`);
+    if (!ok) return;
+    const r = await fetch(`/api/people/${id}`, { method: 'DELETE' });
+    if (r.ok) { window.location.href = '/people'; }
+    else { showToast('No se pudo eliminar la persona', 'error'); }
+  }
+
+  async function copyPublicLink() {
+    const input = document.getElementById('publicAccessLink');
+    try {
+      await navigator.clipboard.writeText(input.value);
+    } catch (_) {
+      input.focus();
+      input.select();
+      document.execCommand('copy');
+    }
+    showToast('Enlace copiado');
+  }
+
+  async function regeneratePublicLink(id) {
+    const ok = await confirmDialog('Se invalidará el enlace anterior y solo funcionará el nuevo.');
+    if (!ok) return;
+    const response = await fetch(`/api/people/${id}/regenerate-token`, { method: 'POST' });
+    if (!response.ok) {
+      showToast('No se pudo regenerar el enlace', 'error');
+      return;
+    }
+    const data = await response.json();
+    document.getElementById('publicAccessLink').value = `${window.location.origin}/form/${data.access_token}`;
+    showToast('Enlace regenerado correctamente');
+  }
+</script>
+<script src="/static/js/documents.js"></script>
+<script src="/static/js/payroll.js"></script>
+{% endblock %}

@@ -1,0 +1,14 @@
+APP MIO — Instrucciones de uso
+==============================
+
+1. Copia '.env.example' como '.env' y edita los valores.
+2. Ejecuta 'APP MIO.exe'.
+   La base de datos y el almacenamiento se crean automáticamente.
+
+Archivos importantes:
+  .env          — Configuración (credenciales, SMTP, etc.)
+  app.db        — Base de datos SQLite (se crea al primer arranque)
+  storage/      — Archivos subidos (PDFs, fotos, branding)
+  logs/         — Registros de la aplicación
+
+NOTA: No borres ni muevas estos archivos o la app perderá datos.

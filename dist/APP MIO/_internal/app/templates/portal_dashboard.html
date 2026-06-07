@@ -1,0 +1,78 @@
+{% extends "portal_base.html" %}
+{% block title %}Mi Dashboard{% endblock %}
+{% set active_page = 'dashboard' %}
+{% block content %}
+<div class="page-header" style="margin-bottom:1.5rem;">
+    <div>
+        <h1>Bienvenido, {{ user.display_name }}</h1>
+        <p class="page-header-sub">Tu espacio personal</p>
+    </div>
+</div>
+
+<div class="stat-grid">
+    <div class="stat-card">
+        <div class="stat-label">Documentos</div>
+        <div class="stat-value">{{ doc_count }}</div>
+        <div class="stat-sub"><a href="/portal/documents" style="color:#818cf8;">Ver documentos</a></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Cuentas bancarias</div>
+        <div class="stat-value">{{ bank_count }}</div>
+        <div class="stat-sub"><a href="/portal/accounts" style="color:#818cf8;">Ver cuentas</a></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Wallets</div>
+        <div class="stat-value">{{ wallet_count }}</div>
+        <div class="stat-sub"><a href="/portal/accounts" style="color:#818cf8;">Ver wallets</a></div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-label">Última nómina</div>
+        {% if latest_payroll %}
+        <div class="stat-value">{{ latest_payroll.amount }} €</div>
+        <div class="stat-sub">{{ latest_payroll.effective_date }}</div>
+        {% else %}
+        <div class="stat-value" style="font-size:1rem;color:#64748b;">—</div>
+        <div class="stat-sub">Sin registros</div>
+        {% endif %}
+    </div>
+</div>
+
+{% if person %}
+<div class="portal-card">
+    <div class="portal-card-title">
+        Mis datos personales
+        <a href="/portal/profile" class="btn-accent btn-sm">Editar</a>
+    </div>
+    <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:.9rem;">
+        <div>
+            <div style="font-size:.75rem;color:#64748b;font-weight:600;text-transform:uppercase;margin-bottom:.2rem;">Nombre</div>
+            <div style="color:#e2e8f0;">{{ person.full_name }}</div>
+        </div>
+        {% if person.dni %}
+        <div>
+            <div style="font-size:.75rem;color:#64748b;font-weight:600;text-transform:uppercase;margin-bottom:.2rem;">DNI</div>
+            <div style="color:#e2e8f0;">{{ person.dni }}</div>
+        </div>
+        {% endif %}
+        {% if person.passport %}
+        <div>
+            <div style="font-size:.75rem;color:#64748b;font-weight:600;text-transform:uppercase;margin-bottom:.2rem;">Pasaporte</div>
+            <div style="color:#e2e8f0;">{{ person.passport }}</div>
+        </div>
+        {% endif %}
+        {% if user.email %}
+        <div>
+            <div style="font-size:.75rem;color:#64748b;font-weight:600;text-transform:uppercase;margin-bottom:.2rem;">Email</div>
+            <div style="color:#e2e8f0;">{{ user.email }}</div>
+        </div>
+        {% endif %}
+        {% if user.phone %}
+        <div>
+            <div style="font-size:.75rem;color:#64748b;font-weight:600;text-transform:uppercase;margin-bottom:.2rem;">Teléfono</div>
+            <div style="color:#e2e8f0;">{{ user.phone }}</div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endif %}
+{% endblock %}

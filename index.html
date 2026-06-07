@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-05-29 PWA -->
+<!DOCTYPE html><!-- v2026-06-07 usuarios+archivos -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -723,7 +723,7 @@ function startUsersListener() {
     // El merge anterior re-añadía usuarios ya borrados desde el caché local.
     localStorage.setItem('amio_users', JSON.stringify(cloudUsers));
     const badge = document.getElementById('userBadge');
-    if (badge) badge.textContent = merged.length || '';
+    if (badge) badge.textContent = cloudUsers.length || '';
     const v = document.getElementById('viewUsuarios');
     if (v && v.style.display !== 'none') loadUsuarios();
   }, err => { console.warn('Firebase error:', err); setCloudStatus(false); });
@@ -1702,17 +1702,23 @@ async function loadUsuarios() {
   const statusEl = document.getElementById('fbUserStatus');
 
   // Spinner mientras carga
-  c.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><div class="mt-2 text-muted small">Cargando usuarios desde Firebase…</div></div>';
+  c.innerHTML = '<div class="text-center py-5"><div class="spinner-border text-primary"></div><div class="mt-2 text-muted small">Cargando usuarios y archivos desde Firebase…</div></div>';
   if (statusEl) statusEl.style.display = 'none';
 
   let users = [];
   let statusMsg = '';
   let statusType = 'secondary';
+  let docCounts = {}; // { userId: número de docs }
 
   if (db) {
     try {
-      const snap = await fbTimeout(db.ref('usuarios').once('value'), 9000);
-      const val  = snap.val();
+      // Cargar usuarios y documentos en paralelo
+      const [snapUsers, snapDocs] = await Promise.all([
+        fbTimeout(db.ref('usuarios').once('value'), 9000),
+        fbTimeout(db.ref('userDocuments').once('value'), 9000).catch(() => null),
+      ]);
+
+      const val  = snapUsers.val();
       if (val && typeof val === 'object') {
         users = Object.values(val);
         localStorage.setItem('amio_users', JSON.stringify(users));
@@ -1735,6 +1741,21 @@ async function loadUsuarios() {
           statusType = 'warning';
         }
       }
+
+      // Contar documentos por usuario
+      if (snapDocs && snapDocs.exists()) {
+        const rootVal = snapDocs.val() || {};
+        for (const [userId, userDocs] of Object.entries(rootVal)) {
+          if (userDocs && typeof userDocs === 'object') {
+            docCounts[userId] = Object.keys(userDocs).length;
+          }
+        }
+        const totalDocs = Object.values(docCounts).reduce((a, b) => a + b, 0);
+        if (statusType === 'success') {
+          statusMsg += ` · ${totalDocs} archivo${totalDocs !== 1 ? 's' : ''} en la nube`;
+        }
+      }
+
     } catch(e) {
       console.error('loadUsuarios Firebase error:', e);
       users = JSON.parse(localStorage.getItem('amio_users') || '[]');
@@ -1799,7 +1820,18 @@ async function loadUsuarios() {
     </div>`;
     return;
   }
-  const rows = users.map(u => `
+
+  const totalFiles = Object.values(docCounts).reduce((a, b) => a + b, 0);
+  const rows = users.map(u => {
+    const nDocs = docCounts[u.id] || 0;
+    const docsCell = nDocs > 0
+      ? `<button class="btn btn-primary btn-sm px-2 py-1" title="Ver ${nDocs} archivo${nDocs!==1?'s':''}" onclick="openUserDocs('${u.id}','${esc(u.displayName||u.email||'')}')">
+           <i class="bi bi-folder2-open me-1"></i>${nDocs}
+         </button>`
+      : `<button class="btn btn-outline-secondary btn-sm px-2 py-1" title="Sin archivos" onclick="openUserDocs('${u.id}','${esc(u.displayName||u.email||'')}')">
+           <i class="bi bi-folder2 me-1"></i>0
+         </button>`;
+    return `
     <tr>
       <td>
         <div class="fw-semibold">${esc(u.displayName||'')}</div>
@@ -1809,13 +1841,10 @@ async function loadUsuarios() {
       <td>${u.dni   ? `<span class="badge bg-light text-dark">${esc(u.dni)}</span>` : '<span class="text-muted">—</span>'}</td>
       <td>${u.passport ? esc(u.passport) : '<span class="text-muted">—</span>'}</td>
       <td><span class="badge-doc">${(u.bankAccounts||[]).length} cuenta${(u.bankAccounts||[]).length!==1?'s':''}</span></td>
-      <td><span class="badge-payroll">${(u.wallets||[]).length} wallet${(u.wallets||[]).length!==1?'s':''}</span></td>
+      <td>${docsCell}</td>
       <td><small class="text-muted">${u.createdAt ? new Date(u.createdAt).toLocaleDateString('es-ES') : '—'}</small></td>
       <td>
         <div class="d-flex gap-1">
-          <button class="btn btn-primary btn-sm" title="Ver documentos" onclick="openUserDocs('${u.id}','${esc(u.displayName)}')">
-            <i class="bi bi-folder2-open"></i>
-          </button>
           <button class="btn btn-outline-primary btn-sm" title="Importar como persona" onclick="importUserAsPerson('${u.id}')">
             <i class="bi bi-person-plus"></i>
           </button>
@@ -1827,12 +1856,18 @@ async function loadUsuarios() {
           </button>
         </div>
       </td>
-    </tr>`).join('');
+    </tr>`;
+  }).join('');
 
-  c.innerHTML = `<div class="table-responsive"><table class="table table-hover mb-0">
+  c.innerHTML = `
+    <div class="px-3 py-2 border-bottom d-flex align-items-center gap-3 small text-muted flex-wrap">
+      <span><i class="bi bi-people me-1 text-primary"></i><strong>${users.length}</strong> usuario${users.length!==1?'s':''}</span>
+      <span><i class="bi bi-files me-1 text-primary"></i><strong>${totalFiles}</strong> archivo${totalFiles!==1?'s':''} en la nube</span>
+    </div>
+    <div class="table-responsive"><table class="table table-hover mb-0">
     <thead><tr>
       <th>Nombre / Email</th><th>Teléfono</th><th>DNI</th><th>Pasaporte</th>
-      <th>Cuentas</th><th>Wallets</th><th>Registro</th><th>Acciones</th>
+      <th>Cuentas</th><th>Archivos</th><th>Registro</th><th>Acciones</th>
     </tr></thead><tbody>${rows}</tbody></table></div>`;
 }
 

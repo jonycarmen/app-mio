@@ -1,0 +1,27 @@
+# ─── Trading Bot Configuration ───────────────────────────────────────────────
+
+# Set to false only when you're ready to trade with real money
+paper_mode: true
+
+# How often the bot checks prices (in seconds)
+interval_seconds: 60
+
+# ─── Strategy Parameters ─────────────────────────────────────────────────────
+# Number of 1-minute candles to calculate the rolling mean/std of the ratio
+window: 60
+
+# Z-score threshold to OPEN a position (higher = fewer trades, lower risk)
+entry_z: 2.0
+
+# Z-score threshold to CLOSE a position (lower = faster exit)
+exit_z: 0.5
+
+# ─── Risk Management ─────────────────────────────────────────────────────────
+# Max % of portfolio to use per trade (per side)
+max_position_pct: 20.0
+
+# If daily losses exceed this %, halt trading for the day
+max_daily_loss_pct: 5.0
+
+# Max simultaneous open pairs trades
+max_open_trades: 1

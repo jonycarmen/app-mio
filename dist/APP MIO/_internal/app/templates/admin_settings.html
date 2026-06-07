@@ -1,0 +1,197 @@
+{% extends "base.html" %}
+{% block title %}Configuración de la aplicación{% endblock %}
+{% block content %}
+<section class="page-header">
+    <div>
+        <h1>Configuración de la app</h1>
+        <p class="page-header-sub">Personaliza el nombre, logo y colores globales</p>
+    </div>
+</section>
+
+{% if error %}<div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:.65rem 1rem;margin-bottom:1rem;color:var(--danger);font-size:.88rem;">{{ error }}</div>{% endif %}
+{% if success %}<div style="background:rgba(34,197,94,.1);border:1px solid rgba(34,197,94,.3);border-radius:8px;padding:.65rem 1rem;margin-bottom:1rem;color:var(--success);font-size:.88rem;">{{ success }}</div>{% endif %}
+
+<div class="grid-detail">
+    <!-- Settings form -->
+    <div class="card" style="grid-column:1/-1;">
+        <div class="card-title">Identidad de la aplicación</div>
+        <form method="POST" action="/admin/settings" enctype="multipart/form-data"
+              style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1.1rem 1.5rem;">
+
+            <!-- App name -->
+            <label class="field" style="grid-column:1/-1;">
+                Nombre de la aplicación
+                <input type="text" name="app_name" value="{{ s.app_name }}" required maxlength="100"
+                       id="preview-name-input"
+                       oninput="document.getElementById('preview-name').textContent=this.value||'People Manager'">
+            </label>
+
+            <!-- Welcome text -->
+            <label class="field" style="grid-column:1/-1;">
+                Texto de bienvenida (login)
+                <textarea name="welcome_text" rows="2" maxlength="300"
+                          style="resize:vertical;">{{ s.welcome_text or '' }}</textarea>
+            </label>
+
+            <!-- Primary color -->
+            <label class="field">
+                Color principal
+                <div style="display:flex;align-items:center;gap:.6rem;">
+                    <input type="color" name="primary_color" value="{{ s.primary_color or '#6366f1' }}"
+                           id="primary-color-input"
+                           oninput="document.getElementById('primary-color-hex').value=this.value;updatePreview()"
+                           style="width:44px;height:38px;padding:2px;cursor:pointer;">
+                    <input type="text" id="primary-color-hex" value="{{ s.primary_color or '#6366f1' }}"
+                           maxlength="7" pattern="#[0-9a-fA-F]{6}"
+                           style="width:90px;font-family:monospace;"
+                           oninput="if(/^#[0-9a-fA-F]{6}$/.test(this.value)){document.getElementById('primary-color-input').value=this.value;document.getElementsByName('primary_color')[0].value=this.value;updatePreview()}">
+                </div>
+                <div style="margin-top:.5rem;display:flex;flex-wrap:wrap;gap:.35rem;">
+                    {% for c in [{'hex':'#6366f1','n':'Indigo'},{'hex':'#3b82f6','n':'Azul'},{'hex':'#22c55e','n':'Verde'},{'hex':'#f59e0b','n':'Ambar'},{'hex':'#ef4444','n':'Rojo'},{'hex':'#a855f7','n':'Morado'},{'hex':'#06b6d4','n':'Cyan'},{'hex':'#0f172a','n':'Oscuro'}] %}
+                    <span onclick="setColor('primary','{{ c.hex }}')"
+                          title="{{ c.n }}"
+                          style="width:22px;height:22px;border-radius:50%;background:{{ c.hex }};cursor:pointer;border:2px solid transparent;transition:border-color .15s;"
+                          class="color-swatch" data-type="primary" data-color="{{ c.hex }}"></span>
+                    {% endfor %}
+                </div>
+            </label>
+
+            <!-- Secondary color -->
+            <label class="field">
+                Color secundario
+                <div style="display:flex;align-items:center;gap:.6rem;">
+                    <input type="color" name="secondary_color" value="{{ s.secondary_color or '#3563e9' }}"
+                           id="secondary-color-input"
+                           oninput="document.getElementById('secondary-color-hex').value=this.value;updatePreview()"
+                           style="width:44px;height:38px;padding:2px;cursor:pointer;">
+                    <input type="text" id="secondary-color-hex" value="{{ s.secondary_color or '#3563e9' }}"
+                           maxlength="7" pattern="#[0-9a-fA-F]{6}"
+                           style="width:90px;font-family:monospace;"
+                           oninput="if(/^#[0-9a-fA-F]{6}$/.test(this.value)){document.getElementById('secondary-color-input').value=this.value;document.getElementsByName('secondary_color')[0].value=this.value;updatePreview()}">
+                </div>
+                <div style="margin-top:.5rem;display:flex;flex-wrap:wrap;gap:.35rem;">
+                    {% for c in [{'hex':'#3563e9','n':'Royal Blue'},{'hex':'#7c3aed','n':'Violeta'},{'hex':'#0891b2','n':'Teal'},{'hex':'#16a34a','n':'Verde oscuro'},{'hex':'#dc2626','n':'Rojo oscuro'},{'hex':'#d97706','n':'Naranja'},{'hex':'#1e293b','n':'Slate'},{'hex':'#334155','n':'Gris azul'}] %}
+                    <span onclick="setColor('secondary','{{ c.hex }}')"
+                          title="{{ c.n }}"
+                          style="width:22px;height:22px;border-radius:50%;background:{{ c.hex }};cursor:pointer;border:2px solid transparent;transition:border-color .15s;"
+                          class="color-swatch" data-type="secondary" data-color="{{ c.hex }}"></span>
+                    {% endfor %}
+                </div>
+            </label>
+
+            <!-- Logo upload -->
+            <div class="field" style="grid-column:1/-1;">
+                <span style="font-size:.8rem;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:.35rem;display:block;">Logo de la aplicación</span>
+                <div style="display:flex;align-items:flex-start;gap:1.2rem;flex-wrap:wrap;">
+                    <div>
+                        <div id="logo-preview" style="width:80px;height:80px;border-radius:12px;border:1px solid var(--border,#334155);overflow:hidden;display:flex;align-items:center;justify-content:center;background:var(--card-bg,#1e293b);">
+                            {% if s.logo_path %}
+                            <img src="/branding/logo" alt="logo" style="width:100%;height:100%;object-fit:contain;" id="logo-img">
+                            {% else %}
+                            <span style="font-size:.75rem;color:#64748b;text-align:center;padding:.3rem;">Sin logo</span>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div style="display:flex;flex-direction:column;gap:.5rem;">
+                        <input type="file" name="logo" accept="image/jpeg,image/png" id="logo-file"
+                               style="font-size:.85rem;"
+                               onchange="previewLogo(this)">
+                        <span style="font-size:.78rem;color:#64748b;">JPG o PNG · máx. 5 MB</span>
+                        {% if s.logo_path %}
+                        <form method="POST" action="/admin/settings/remove-logo" style="margin:0;">
+                            <button type="submit" class="button btn-sm btn-danger" style="font-size:.8rem;">Eliminar logo actual</button>
+                        </form>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+
+            <div style="grid-column:1/-1;margin-top:.5rem;">
+                <button type="submit" class="button btn-success">Guardar configuración</button>
+            </div>
+        </form>
+    </div>
+
+    <!-- Live preview -->
+    <div class="card">
+        <div class="card-title">Vista previa del header</div>
+        <div id="preview-header" style="padding:.75rem 1rem;border-radius:8px;background:#0f172a;border:1px solid #334155;display:flex;align-items:center;gap:.75rem;">
+            <div id="preview-logo-wrap" style="{% if not s.logo_path %}display:none{% endif %};">
+                {% if s.logo_path %}
+                <img src="/branding/logo" alt="" id="preview-logo-img" style="height:32px;width:32px;object-fit:contain;border-radius:6px;">
+                {% endif %}
+            </div>
+            <span id="preview-name" style="font-weight:700;font-size:1rem;color:#f1f5f9;">{{ s.app_name }}</span>
+        </div>
+        <div style="margin-top:.9rem;">
+            <div style="font-size:.78rem;color:#64748b;margin-bottom:.4rem;">Botón principal</div>
+            <button id="preview-btn" style="padding:.5rem 1.1rem;border-radius:7px;border:none;font-weight:600;font-size:.875rem;cursor:default;color:#fff;background:{{ s.primary_color or '#6366f1' }};">Acción</button>
+        </div>
+        <div style="margin-top:.75rem;">
+            <div style="font-size:.78rem;color:#64748b;margin-bottom:.4rem;">Elemento secundario</div>
+            <span id="preview-badge" style="display:inline-block;padding:.3rem .8rem;border-radius:20px;font-size:.8rem;font-weight:600;color:#fff;background:{{ s.secondary_color or '#3563e9' }};">Badge</span>
+        </div>
+    </div>
+
+    <!-- Login preview -->
+    <div class="card">
+        <div class="card-title">Vista previa del login</div>
+        <div style="background:#0f172a;border-radius:10px;padding:1.5rem 1.25rem;border:1px solid #334155;text-align:center;">
+            <div id="preview-login-logo" style="margin-bottom:.75rem;{% if not s.logo_path %}display:none{% endif %};">
+                {% if s.logo_path %}
+                <img src="/branding/logo" alt="" style="height:48px;object-fit:contain;border-radius:8px;" id="preview-login-logo-img">
+                {% endif %}
+            </div>
+            <div id="preview-login-name" style="font-size:1.3rem;font-weight:700;color:#f1f5f9;margin-bottom:.2rem;">{{ s.app_name }}</div>
+            <div id="preview-login-sub" style="font-size:.83rem;color:#64748b;">{{ s.welcome_text or 'Acceso restringido al panel' }}</div>
+        </div>
+    </div>
+</div>
+
+<script>
+function setColor(type, hex) {
+    if (type === 'primary') {
+        document.getElementById('primary-color-input').value = hex;
+        document.getElementById('primary-color-hex').value = hex;
+        document.getElementsByName('primary_color')[0].value = hex;
+    } else {
+        document.getElementById('secondary-color-input').value = hex;
+        document.getElementById('secondary-color-hex').value = hex;
+        document.getElementsByName('secondary_color')[0].value = hex;
+    }
+    updatePreview();
+}
+
+function updatePreview() {
+    const p = document.getElementById('primary-color-input').value;
+    const s = document.getElementById('secondary-color-input').value;
+    document.getElementById('preview-btn').style.background = p;
+    document.getElementById('preview-badge').style.background = s;
+}
+
+function previewLogo(input) {
+    if (!input.files || !input.files[0]) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const src = e.target.result;
+        // Logo preview
+        const lp = document.getElementById('logo-preview');
+        lp.innerHTML = '<img src="'+src+'" style="width:100%;height:100%;object-fit:contain;" />';
+        // Header preview
+        const hw = document.getElementById('preview-logo-wrap');
+        hw.style.display = '';
+        hw.innerHTML = '<img src="'+src+'" style="height:32px;width:32px;object-fit:contain;border-radius:6px;">';
+        // Login preview
+        const ll = document.getElementById('preview-login-logo');
+        ll.style.display = '';
+        ll.innerHTML = '<img src="'+src+'" style="height:48px;object-fit:contain;border-radius:8px;">';
+    };
+    reader.readAsDataURL(input.files[0]);
+}
+
+// Sync text hex inputs with hidden color inputs (already done inline, but keep backup)
+document.getElementById('preview-name-input').addEventListener('input', function() {
+    document.getElementById('preview-login-name').textContent = this.value || 'People Manager';
+});
+</script>
+{% endblock %}

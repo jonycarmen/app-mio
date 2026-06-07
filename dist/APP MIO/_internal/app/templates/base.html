@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="People Manager">
+    <link rel="manifest" href="/static/manifest.json">
+    <link rel="apple-touch-icon" href="/static/icons/icon-192.svg">
+    <title>{% block title %}Gestión de personas{% endblock %}</title>
+    <link rel="stylesheet" href="/static/css/app.css">
+    {% set _s = request.state.app_settings if request.state is defined and request.state.app_settings is defined else None %}
+    {% if _s %}
+    <style>
+        :root {
+            --primary: {{ _s.primary_color or '#6366f1' }};
+            --secondary: {{ _s.secondary_color or '#3563e9' }};
+        }
+    </style>
+    {% endif %}
+</head>
+<body>
+    {% if not public_view %}
+    {% set _s = request.state.app_settings if request.state is defined and request.state.app_settings is defined else None %}
+    <header class="topbar">
+        <div class="container topbar-inner">
+            <a href="/people" class="brand" style="display:flex;align-items:center;gap:.55rem;">
+                {% if _s and _s.logo_path %}
+                <img src="/branding/logo" alt="logo" style="height:28px;width:28px;object-fit:contain;border-radius:6px;">
+                {% endif %}
+                {{ _s.app_name if _s and _s.app_name else 'People Manager' }}
+            </a>
+            <nav class="topbar-nav">
+                <a href="/people" class="button btn-outline" style="color:#94a3b8;border-color:#334155;">Listado</a>
+                <a href="/people/new" class="button btn-success">+ Nueva persona</a>
+                <a href="/admin/users" class="button btn-outline" style="color:#94a3b8;border-color:#334155;" title="Usuarios del portal">Usuarios</a>
+                <a href="/admin/invitations" class="button btn-outline" style="color:#94a3b8;border-color:#334155;" title="Invitaciones">Invitaciones</a>
+                <a href="/admin/backups" class="button btn-outline" style="color:#94a3b8;border-color:#334155;" title="Copias de seguridad">Backups</a>
+                <a href="/admin/settings" class="button btn-outline" style="color:#94a3b8;border-color:#334155;" title="Configuración">Ajustes</a>
+                <a href="/admin/logout" class="button btn-outline" style="color:#94a3b8;border-color:#334155;" title="Cerrar sesión">Salir</a>
+            </nav>
+            <!-- Hamburger button (visible on mobile only) -->
+            <button class="hamburger" id="hamburger-btn" aria-label="Abrir menú" aria-expanded="false">
+                <span></span><span></span><span></span>
+            </button>
+        </div>
+    </header>
+
+    <!-- Mobile overlay backdrop -->
+    <div class="mobile-overlay" id="mobile-overlay" role="presentation"></div>
+
+    <!-- Mobile side navigation drawer -->
+    <nav class="mobile-nav" id="mobile-nav" aria-label="Menú principal">
+        <div class="mobile-nav-header">
+            <span class="mobile-nav-brand">{{ _s.app_name if _s and _s.app_name else 'People Manager' }}</span>
+            <button class="mobile-nav-close" id="mobile-nav-close" aria-label="Cerrar menú">&#10005;</button>
+        </div>
+        <a href="/people">&#128101; Listado</a>
+        <a href="/people/new">&#43; Nueva persona</a>
+        <div class="mobile-nav-divider"></div>
+        <a href="/admin/users">&#128100; Usuarios</a>
+        <a href="/admin/invitations">&#128140; Invitaciones</a>
+        <a href="/admin/backups">&#128190; Backups</a>
+        <a href="/admin/settings">&#9881; Ajustes</a>
+        <div class="mobile-nav-divider"></div>
+        <a href="/admin/logout" class="nav-danger">&#128682; Cerrar sesión</a>
+    </nav>
+    {% endif %}
+    <main class="container{% if public_view %} public-container{% endif %}" style="padding-bottom: 3rem;">
+        {% block content %}{% endblock %}
+    </main>
+    <div id="toast-container"></div>
+    <div id="modal-root"></div>
+    <script>
+    // ── CSRF helper ───────────────────────────────────────────────
+    (function patchFetch() {
+      const _MUTATING = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
+      function getCsrfCookie() {
+        const match = document.cookie.match(/(?:^|;\s*)csrf_token=([^;]+)/);
+        return match ? decodeURIComponent(match[1]) : null;
+      }
+      const _origFetch = window.fetch.bind(window);
+      window.fetch = function(input, init) {
+        init = init || {};
+        const method = (init.method || 'GET').toUpperCase();
+        if (_MUTATING.has(method)) {
+          const csrf = getCsrfCookie();
+          if (csrf) {
+            init.headers = Object.assign({'X-CSRF-Token': csrf}, init.headers || {});
+          }
+        }
+        return _origFetch(input, init);
+      };
+    })();
+
+    // ── Toast helper ──────────────────────────────────────────────
+    function showToast(msg, type = 'success') {
+      const c = document.getElementById('toast-container');
+      const t = document.createElement('div');
+      t.className = 'toast toast-' + type;
+      t.textContent = msg;
+      c.appendChild(t);
+      setTimeout(() => t.remove(), 3200);
+    }
+
+    // ── Confirm modal helper ──────────────────────────────────────
+    function confirmDialog(msg) {
+      return new Promise(resolve => {
+        const root = document.getElementById('modal-root');
+        root.innerHTML = `
+          <div class="modal-overlay" id="modal-overlay">
+            <div class="modal-box">
+              <h3>Confirmar eliminación</h3>
+              <p>${msg}</p>
+              <div class="modal-actions">
+                <button class="button btn-outline" id="modal-cancel">Cancelar</button>
+                <button class="button btn-danger" id="modal-confirm">Eliminar</button>
+              </div>
+            </div>
+          </div>`;
+        document.getElementById('modal-cancel').onclick  = () => { root.innerHTML = ''; resolve(false); };
+        document.getElementById('modal-confirm').onclick = () => { root.innerHTML = ''; resolve(true);  };
+        document.getElementById('modal-overlay').onclick = (e) => { if (e.target === e.currentTarget) { root.innerHTML = ''; resolve(false); } };
+      });
+    }
+
+    // ── Hamburger / mobile nav ────────────────────────────────────
+    (function() {
+      const hamburger = document.getElementById('hamburger-btn');
+      const nav       = document.getElementById('mobile-nav');
+      const overlay   = document.getElementById('mobile-overlay');
+      const closeBtn  = document.getElementById('mobile-nav-close');
+      if (!hamburger) return;
+
+      function openNav() {
+        nav.classList.add('is-open');
+        overlay.classList.add('is-open');
+        hamburger.classList.add('is-open');
+        hamburger.setAttribute('aria-expanded', 'true');
+        document.body.style.overflow = 'hidden';
+      }
+      function closeNav() {
+        nav.classList.remove('is-open');
+        overlay.classList.remove('is-open');
+        hamburger.classList.remove('is-open');
+        hamburger.setAttribute('aria-expanded', 'false');
+        document.body.style.overflow = '';
+      }
+      hamburger.addEventListener('click', () => nav.classList.contains('is-open') ? closeNav() : openNav());
+      closeBtn  && closeBtn.addEventListener('click', closeNav);
+      overlay   && overlay.addEventListener('click', closeNav);
+      // Close on nav link tap
+      nav && nav.querySelectorAll('a').forEach(a => a.addEventListener('click', closeNav));
+    })();
+
+    // ── Auto data-label for responsive table cards ───────────────
+    (function() {
+      document.querySelectorAll('.table').forEach(function(table) {
+        var ths = Array.from(table.querySelectorAll('thead th')).map(function(th) { return th.textContent.trim(); });
+        table.querySelectorAll('tbody tr').forEach(function(row) {
+          row.querySelectorAll('td').forEach(function(td, i) {
+            if (ths[i] && !td.hasAttribute('colspan')) td.setAttribute('data-label', ths[i]);
+          });
+        });
+      });
+    })();
+
+    // ── iOS 100dvh polyfill ───────────────────────────────────────
+    (function() {
+      function setVh() { document.documentElement.style.setProperty('--vh', window.innerHeight * .01 + 'px'); }
+      setVh();
+      window.addEventListener('resize', setVh);
+    })();
+
+    // ── Lazy-load image observer ──────────────────────────────────
+    if ('IntersectionObserver' in window) {
+      const io = new IntersectionObserver(function(entries) {
+        entries.forEach(function(e) { if (e.isIntersecting) { e.target.classList.add('loaded'); io.unobserve(e.target); } });
+      });
+      document.querySelectorAll('img[loading="lazy"]').forEach(function(img) { io.observe(img); });
+    }
+    </script>
+</body>
+</html>

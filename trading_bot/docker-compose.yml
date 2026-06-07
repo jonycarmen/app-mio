@@ -1,0 +1,17 @@
+version: "3.9"
+
+services:
+  trading-bot:
+    build: .
+    container_name: btc_xrp_bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./logs:/app/logs
+      - ./config.yaml:/app/config.yaml
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "5"
