@@ -1589,27 +1589,31 @@ async function diagnosticoFirebase() {
     // Test de conexión real
     L.push(`🔗 Conexión servidor: ${_isConnected ? '✅ conectado al servidor EU' : '⚠️ aún conectando…'}`);
 
-    // Test escritura con timeout
+    // Test escritura — se usa la ruta 'usuarios/__diag__' que siempre tiene write access
     try {
-      await fbTimeout(db.ref('_diag_test').set({ ts: Date.now() }), 7000);
-      await fbTimeout(db.ref('_diag_test').remove(), 5000);
+      await fbTimeout(db.ref('usuarios/__diag__').set({ ts: Date.now() }), 7000);
+      await fbTimeout(db.ref('usuarios/__diag__').remove(), 5000);
       L.push('✏️ Escritura/lectura: ✅ OK');
     } catch(e) {
       const isPerm    = e.code === 'PERMISSION_DENIED' || String(e.message).toLowerCase().includes('permission');
       const isTimeout = e.code === 'TIMEOUT';
       L.push(`✏️ Escritura: ❌ ${e.code || e.message}`);
-      if (isTimeout) {
-        L.push('   ↳ ⏱️ Firebase no responde — posibles causas:');
-        L.push('   • La base de datos NO está creada en Firebase Console');
-        L.push('   • App Check activo bloqueando operaciones');
-        L.push('   • Firebase Rules con acceso denegado');
-        L.push('   SOLUCIÓN A: Firebase Console → Realtime Database → Crear base de datos (región: europe-west1)');
-        L.push('   SOLUCIÓN B: Realtime Database → Reglas → { "rules": { ".read": true, ".write": true } } → Publicar');
-      } else if (isPerm) {
-        L.push('   ↳ 🔒 SOLUCIÓN: Firebase Console → Realtime Database → Reglas → cambiar a:');
+      if (isTimeout || isPerm) {
+        L.push('   ↳ 🔒 Firebase Rules NO permiten escritura. Ve a:');
+        L.push('   console.firebase.google.com → tu proyecto');
+        L.push('   → Realtime Database → Reglas → cambia a:');
         L.push('   { "rules": { ".read": true, ".write": true } }');
-        L.push('   Luego pulsa "Publicar" en Firebase Console');
+        L.push('   → Pulsa "Publicar"');
       }
+    }
+    // Test backup
+    try {
+      await fbTimeout(db.ref('backups/__diag__').set({ ts: Date.now() }), 5000);
+      await fbTimeout(db.ref('backups/__diag__').remove(), 4000);
+      L.push('💾 Ruta backups/: ✅ accesible');
+    } catch(e) {
+      L.push('💾 Ruta backups/: ⚠️ Sin acceso — las copias de seguridad fallarán');
+      L.push('   Añade en Firebase Rules:  "backups": { ".read": true, ".write": true }');
     }
     // Lectura de usuarios con timeout
     try {
@@ -1627,7 +1631,7 @@ async function diagnosticoFirebase() {
     } catch(e) {
       L.push(`👥 Lectura usuarios: ❌ ${e.code || e.message}`);
     }
-    // Copia de seguridad con timeout
+    // Copia de seguridad
     try {
       const snap2 = await fbTimeout(db.ref('backups/latest').once('value'), 7000);
       if (snap2.exists()) {
@@ -1635,12 +1639,13 @@ async function diagnosticoFirebase() {
         const fecha = d.savedAt ? new Date(d.savedAt).toLocaleString('es-ES') : '?';
         const np = d.people   ? Object.keys(d.people).length   : 0;
         const nn = d.payrolls ? Object.keys(d.payrolls).length : 0;
-        L.push(`💾 Copia en nube: ✅ del ${fecha} (${np} personas, ${nn} nóminas)`);
+        L.push(`📦 Copia en nube: ✅ del ${fecha} (${np} personas, ${nn} nóminas)`);
       } else {
-        L.push('💾 Copia en nube: ⚠️ ninguna todavía — pulsa "Guardar copia en la nube"');
+        L.push('📦 Copia en nube: ⚠️ ninguna todavía — pulsa "Guardar copia en la nube"');
       }
     } catch(e) {
-      L.push(`💾 Copia en nube: ❌ ${e.code || e.message}`);
+      const isFail = e.code === 'PERMISSION_DENIED' || e.code === 'TIMEOUT' || String(e.message).toLowerCase().includes('permission');
+      L.push(`📦 Copia en nube: ❌ ${e.code || e.message}${isFail ? ' — añade "backups" a las Firebase Rules' : ''}`);
     }
   } else {
     L.push('⚠️ Firebase no inicializado — recarga la página y espera 5 segundos antes de hacer el diagnóstico');
@@ -1712,10 +1717,12 @@ async function loadUsuarios() {
 
   if (db) {
     try {
-      // Cargar usuarios y documentos en paralelo
+      // Cargar usuarios y contadores de docs en paralelo
+      // ⚠️ NO se carga userDocuments (puede ser cientos de MB de base64)
+      // Se usa userDocCounts: nodo ligero { userId: N } actualizado por el portal
       const [snapUsers, snapDocs] = await Promise.all([
         fbTimeout(db.ref('usuarios').once('value'), 9000),
-        fbTimeout(db.ref('userDocuments').once('value'), 9000).catch(() => null),
+        fbTimeout(db.ref('userDocCounts').once('value'), 5000).catch(() => null),
       ]);
 
       const val  = snapUsers.val();
@@ -1742,16 +1749,16 @@ async function loadUsuarios() {
         }
       }
 
-      // Contar documentos por usuario
+      // Contar documentos por usuario (desde nodo ligero userDocCounts)
       if (snapDocs && snapDocs.exists()) {
-        const rootVal = snapDocs.val() || {};
-        for (const [userId, userDocs] of Object.entries(rootVal)) {
-          if (userDocs && typeof userDocs === 'object') {
-            docCounts[userId] = Object.keys(userDocs).length;
+        const countsObj = snapDocs.val() || {};
+        for (const [userId, count] of Object.entries(countsObj)) {
+          if (typeof count === 'number' && count > 0) {
+            docCounts[userId] = count;
           }
         }
         const totalDocs = Object.values(docCounts).reduce((a, b) => a + b, 0);
-        if (statusType === 'success') {
+        if (statusType === 'success' && totalDocs > 0) {
           statusMsg += ` · ${totalDocs} archivo${totalDocs !== 1 ? 's' : ''} en la nube`;
         }
       }

@@ -683,6 +683,7 @@ async function syncDocToCloud(doc, rawBuf) {
       category: doc.category || '', description: doc.description || '',
       uploadedAt: doc.uploadedAt, data: b64,
     }), 20000);
+    pushDocCount(); // actualizar contador ligero (fire-and-forget)
   } catch(e) { console.warn('syncDocToCloud:', e.code || e.message); }
 }
 
@@ -690,7 +691,17 @@ async function removeDocFromCloud(docId) {
   if (!db || !currentUserId) return;
   try {
     await fbTimeout(db.ref('userDocuments/' + currentUserId + '/' + docId).remove(), 8000);
+    pushDocCount(); // actualizar contador ligero
   } catch(e) { console.warn('removeDocFromCloud:', e.code || e.message); }
+}
+
+// Contador ligero de documentos en Firebase (no requiere descargar base64)
+async function pushDocCount() {
+  if (!db || !currentUserId) return;
+  try {
+    const docs = await udbByUser(currentUserId);
+    await fbTimeout(db.ref('userDocCounts/' + currentUserId).set(docs.length), 5000);
+  } catch(e) { /* silencioso */ }
 }
 
 // Sincroniza todos los docs locales que aún no están en Firebase (primera vez)
@@ -705,13 +716,14 @@ async function syncAllLocalDocsToCloud() {
     const snap = await fbTimeout(db.ref('userDocuments/' + currentUserId).once('value'), 8000);
     const cloudIds = snap.exists() ? new Set(Object.keys(snap.val() || {})) : new Set();
     const missing  = localDocs.filter(d => !cloudIds.has(d.id));
-    if (!missing.length) return;
+    if (!missing.length) { pushDocCount(); return; }
 
     console.log(`📤 Sincronizando ${missing.length} doc(s) previo(s) a la nube...`);
     for (const doc of missing) {
       await syncDocToCloud(doc, doc.data); // doc.data es ArrayBuffer de IndexedDB
     }
     console.log('✅ Documentos previos sincronizados');
+    pushDocCount(); // actualizar contador al finalizar sync
   } catch(e) { console.warn('syncAllLocalDocsToCloud:', e.message); }
 }
 
