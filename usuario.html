@@ -322,10 +322,15 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 
     <!-- ── DOCUMENTOS ── -->
     <div id="viewDocs" style="display:none">
-      <div class="d-flex align-items-center justify-content-between mb-3">
-        <div>
+      <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+        <div class="flex-grow-1">
           <h4 class="fw-bold mb-0">Mis Documentos y Fotos</h4>
-          <p class="text-muted small mb-0" id="docCountText">0 archivos</p>
+          <div class="d-flex align-items-center gap-2 mt-1">
+            <div class="progress flex-grow-1" style="height:7px;max-width:180px;border-radius:4px">
+              <div class="progress-bar" id="docProgressBar" role="progressbar" style="width:0%;border-radius:4px;transition:width .4s"></div>
+            </div>
+            <span class="small text-muted" id="docCountText">0 / 50</span>
+          </div>
         </div>
       </div>
 
@@ -1090,7 +1095,13 @@ async function loadDocs() {
     : currentFilter==='pdf'   ? all.filter(d=>d.mimeType==='application/pdf')
     : all.filter(isPhoto);
 
-  document.getElementById('docCountText').textContent = `${all.length} / ${MAX_DOCS} archivos`;
+  const pct = Math.min(100, Math.round(all.length / MAX_DOCS * 100));
+  const bar = document.getElementById('docProgressBar');
+  if (bar) {
+    bar.style.width = pct + '%';
+    bar.className = `progress-bar ${pct >= 90 ? 'bg-danger' : pct >= 60 ? 'bg-warning' : 'bg-success'}`;
+  }
+  document.getElementById('docCountText').textContent = `${all.length} / ${MAX_DOCS}`;
   const c = document.getElementById('myDocsList');
 
   if (!docs.length) {

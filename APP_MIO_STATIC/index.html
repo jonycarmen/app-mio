@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-06-07 usuarios+archivos -->
+<!DOCTYPE html><!-- v2026-06-12 full-update -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -125,8 +125,33 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 @media (max-width: 768px) {
   .sidebar { transform: translateX(-100%); transition: transform .3s; }
   .sidebar.open { transform: translateX(0); }
-  .main-content { margin-left: 0; width: 100%; padding: 1rem; }
+  .main-content { margin-left: 0; width: 100%; padding: 1rem; padding-top: 4.5rem !important; }
 }
+
+/* ── HAMBURGUESA MÓVIL ── */
+.btn-hamburger {
+  display: none; position: fixed; top: .85rem; left: .85rem; z-index: 200;
+  background: var(--primary); color: #fff; border: none; border-radius: 10px;
+  width: 44px; height: 44px; font-size: 1.2rem; cursor: pointer;
+  align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(99,102,241,.4); transition: background .15s;
+}
+.btn-hamburger:hover { background: var(--primary-dark); }
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 99; }
+.sidebar-overlay.show { display: block; }
+@media (max-width: 768px) { .btn-hamburger { display: flex; } }
+
+/* ── DASHBOARD ── */
+.dash-stat {
+  background: #fff; border-radius: 14px; padding: 1.4rem 1rem; text-align: center;
+  box-shadow: 0 1px 4px rgba(0,0,0,.07); border: 1px solid #e2e8f0; transition: transform .15s, box-shadow .15s;
+}
+.dash-stat:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,.1); }
+.dash-stat .stat-num { font-size: 2.25rem; font-weight: 800; line-height: 1; margin: .5rem 0 .25rem; }
+.dash-stat .stat-lbl { font-size: .82rem; color: #64748b; font-weight: 500; }
+.activity-item { display: flex; align-items: center; gap: .75rem; padding: .65rem 0; border-bottom: 1px solid #f1f5f9; }
+.activity-item:last-child { border-bottom: none; }
+.act-avatar { width: 36px; height: 36px; border-radius: 50%; background: var(--primary); display: flex; align-items: center; justify-content: center; flex-shrink: 0; color: #fff; font-size: .85rem; font-weight: 700; }
 </style>
 </head>
 <body>
@@ -163,12 +188,24 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 
 <!-- ==================== APP ==================== -->
 <div id="appContainer" style="display:none">
+
+<!-- Hamburguesa móvil -->
+<button class="btn-hamburger" id="hamburgerBtn" onclick="toggleSidebar()">
+  <i class="bi bi-list" id="hamburgerIcon"></i>
+</button>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
   <nav class="sidebar" id="sidebar">
     <div class="sidebar-brand"><i class="bi bi-people-fill me-2"></i>APP MIO</div>
     <div class="sidebar-nav">
       <ul class="nav flex-column">
         <li class="nav-item">
-          <a href="#" class="nav-link active" id="navPeople" onclick="navigate('people');return false;">
+          <a href="#" class="nav-link active" id="navDashboard" onclick="navigate('dashboard');return false;">
+            <i class="bi bi-house"></i>Inicio
+          </a>
+        </li>
+        <li class="nav-item">
+          <a href="#" class="nav-link" id="navPeople" onclick="navigate('people');return false;">
             <i class="bi bi-people"></i>Personas
           </a>
         </li>
@@ -205,6 +242,67 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
   </nav>
 
   <main class="main-content">
+
+    <!-- DASHBOARD -->
+    <div id="viewDashboard" style="display:none">
+      <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+        <div>
+          <h4 class="fw-bold mb-0">Panel de Administración</h4>
+          <p class="text-muted small mb-0" id="dashDate"></p>
+        </div>
+        <span id="dashOnlineBadge" class="badge bg-secondary" style="font-size:.75rem">Conectando…</span>
+      </div>
+      <!-- Stats -->
+      <div class="row g-3 mb-4">
+        <div class="col-6 col-md-3">
+          <div class="dash-stat">
+            <i class="bi bi-people fs-2 text-primary"></i>
+            <div class="stat-num text-primary" id="dashNumPersonas">—</div>
+            <div class="stat-lbl">Personas</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="dash-stat">
+            <i class="bi bi-person-check fs-2 text-success"></i>
+            <div class="stat-num text-success" id="dashNumUsuarios">—</div>
+            <div class="stat-lbl">Usuarios portal</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="dash-stat">
+            <i class="bi bi-folder2-open fs-2 text-warning"></i>
+            <div class="stat-num text-warning" id="dashNumDocs">—</div>
+            <div class="stat-lbl">Docs en nube</div>
+          </div>
+        </div>
+        <div class="col-6 col-md-3">
+          <div class="dash-stat">
+            <i class="bi bi-cash-coin fs-2 text-info"></i>
+            <div class="stat-num text-info" id="dashNumNominas">—</div>
+            <div class="stat-lbl">Nóminas</div>
+          </div>
+        </div>
+      </div>
+      <!-- Acceso rápido -->
+      <div class="form-card mb-4">
+        <p class="section-title"><i class="bi bi-lightning me-2"></i>Acceso rápido</p>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-primary" onclick="navigate('people')"><i class="bi bi-people me-1"></i>Gestionar personas</button>
+          <button class="btn btn-outline-primary" onclick="navigate('usuarios')"><i class="bi bi-person-check me-1"></i>Ver usuarios</button>
+          <button class="btn btn-outline-primary" onclick="navigate('allDocs')"><i class="bi bi-folder2-open me-1"></i>Ver documentos</button>
+          <button class="btn btn-outline-secondary" onclick="navigate('settings')"><i class="bi bi-gear me-1"></i>Configuración</button>
+          <a href="usuario.html" target="_blank" class="btn btn-outline-info"><i class="bi bi-box-arrow-up-right me-1"></i>Portal usuario</a>
+        </div>
+      </div>
+      <!-- Registros recientes -->
+      <div class="form-card">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+          <p class="section-title mb-0"><i class="bi bi-clock-history me-2"></i>Registros recientes</p>
+          <button class="btn btn-outline-secondary btn-sm" onclick="loadDashboard()"><i class="bi bi-arrow-clockwise"></i></button>
+        </div>
+        <div id="dashRecentUsers"><p class="text-muted small mb-0">Cargando…</p></div>
+      </div>
+    </div>
 
     <!-- PEOPLE LIST -->
     <div id="viewPeopleList">
@@ -431,10 +529,13 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
         </div>
         <div class="d-flex gap-2 flex-wrap">
           <button class="btn btn-primary btn-sm" onclick="loadUsuarios()">
-            <i class="bi bi-arrow-clockwise me-1"></i>Actualizar lista
+            <i class="bi bi-arrow-clockwise me-1"></i>Actualizar
           </button>
           <button class="btn btn-outline-secondary btn-sm" id="btnUsuariosSort" onclick="toggleUsuariosSort()">
             <i class="bi bi-sort-alpha-down me-1"></i>A→Z
+          </button>
+          <button class="btn btn-outline-success btn-sm" onclick="exportUsuariosExcel()">
+            <i class="bi bi-file-earmark-excel me-1"></i>Excel
           </button>
           <button class="btn btn-success btn-sm" onclick="syncAllUsers()">
             <i class="bi bi-arrow-repeat me-1"></i>Sincronizar → Panel
@@ -450,7 +551,7 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
           </button>
           <input type="file" id="importUserFile" accept=".json" style="display:none" onchange="importUserProfile(event)">
           <a href="usuario.html" target="_blank" class="btn btn-outline-primary btn-sm">
-            <i class="bi bi-box-arrow-up-right me-1"></i>Abrir portal
+            <i class="bi bi-box-arrow-up-right me-1"></i>Portal
           </a>
         </div>
       </div>
@@ -459,6 +560,13 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
       <!-- Resultado diagnóstico -->
       <div id="diagResult" class="mb-3" style="display:none"></div>
       <div class="people-table">
+        <!-- Buscador usuarios -->
+        <div class="p-3 border-bottom">
+          <div class="search-box" style="max-width:420px">
+            <i class="bi bi-search"></i>
+            <input type="text" id="usuariosSearch" class="form-control" placeholder="Buscar por nombre, email, DNI…" oninput="renderUsuariosTable()">
+          </div>
+        </div>
         <div id="usuariosContainer"></div>
       </div>
     </div>
@@ -881,12 +989,24 @@ function navigate(view, id=null) {
   // Desconectar listener de documentos al salir de esa sección
   if (view !== 'allDocs' && _unsubAllDocs) { _unsubAllDocs(); _unsubAllDocs = null; _allDocsLoaded = false; }
 
-  ['viewPeopleList','viewPersonForm','viewPersonDetail','viewSettings','viewUsuarios','viewAllDocs']
+  ['viewDashboard','viewPeopleList','viewPersonForm','viewPersonDetail','viewSettings','viewUsuarios','viewAllDocs']
     .forEach(v => document.getElementById(v).style.display='none');
   document.querySelectorAll('.sidebar-nav .nav-link')
     .forEach(l => l.classList.remove('active'));
 
-  if (view==='people') {
+  // Cerrar sidebar en móvil al navegar
+  const _sb = document.getElementById('sidebar');
+  const _ov = document.getElementById('sidebarOverlay');
+  if (_sb && _sb.classList.contains('open')) {
+    _sb.classList.remove('open');
+    if (_ov) _ov.classList.remove('show');
+    const _ic = document.getElementById('hamburgerIcon');
+    if (_ic) _ic.className = 'bi bi-list';
+  }
+
+  if (view==='dashboard') {
+    show('viewDashboard'); actNav('navDashboard'); loadDashboard();
+  } else if (view==='people') {
     show('viewPeopleList'); actNav('navPeople'); renderPeopleList();
   } else if (view==='personNew') {
     currentPersonId=null; show('viewPersonForm'); actNav('navPeople'); loadForm(null);
@@ -1702,6 +1822,76 @@ async function syncAllUsers() {
 }
 
 // ── USUARIOS ──────────────────────────────────────────────
+let _cachedUsers    = [];
+let _cachedDocCounts= {};
+
+function renderUsuariosTable() {
+  const c = document.getElementById('usuariosContainer');
+  if (!c) return;
+  const q = (document.getElementById('usuariosSearch')?.value || '').toLowerCase().trim();
+  const users = q ? _cachedUsers.filter(u =>
+    [u.displayName, u.email, u.dni, u.passport, u.phone]
+      .filter(Boolean).join(' ').toLowerCase().includes(q)
+  ) : _cachedUsers;
+
+  if (!_cachedUsers.length) {
+    c.innerHTML = `<div class="empty-state">
+      <i class="bi bi-person-check"></i>
+      <div class="fw-semibold">Ningún usuario registrado todavía</div>
+      <div class="small mt-2 text-muted">Comparte el link del portal de usuario para que se registren.</div>
+    </div>`;
+    return;
+  }
+  if (!users.length) {
+    c.innerHTML = `<div class="empty-state"><i class="bi bi-search"></i><div>Sin resultados para "<em>${esc(q)}</em>"</div></div>`;
+    return;
+  }
+
+  const docCounts  = _cachedDocCounts;
+  const totalFiles = Object.values(docCounts).reduce((a, b) => a + b, 0);
+  const rows = users.map(u => {
+    const nDocs = docCounts[u.id] || 0;
+    const docsCell = nDocs > 0
+      ? `<button class="btn btn-primary btn-sm px-2 py-1" title="Ver ${nDocs} archivo${nDocs!==1?'s':''}" onclick="openUserDocs('${u.id}','${esc(u.displayName||u.email||'')}')">
+           <i class="bi bi-folder2-open me-1"></i>${nDocs}
+         </button>`
+      : `<button class="btn btn-outline-secondary btn-sm px-2 py-1" title="Sin archivos" onclick="openUserDocs('${u.id}','${esc(u.displayName||u.email||'')}')">
+           <i class="bi bi-folder2 me-1"></i>0
+         </button>`;
+    return `<tr>
+      <td>
+        <div class="fw-semibold">${esc(u.displayName||'')}</div>
+        <small class="text-muted">${esc(u.email||'')}</small>
+      </td>
+      <td>${u.phone ? esc(u.phone) : '<span class="text-muted">—</span>'}</td>
+      <td>${u.dni   ? `<span class="badge bg-light text-dark">${esc(u.dni)}</span>` : '<span class="text-muted">—</span>'}</td>
+      <td>${u.passport ? esc(u.passport) : '<span class="text-muted">—</span>'}</td>
+      <td><span class="badge-doc">${(u.bankAccounts||[]).length} cuenta${(u.bankAccounts||[]).length!==1?'s':''}</span></td>
+      <td>${docsCell}</td>
+      <td><small class="text-muted">${u.createdAt ? new Date(u.createdAt).toLocaleDateString('es-ES') : '—'}</small></td>
+      <td>
+        <div class="d-flex gap-1">
+          <button class="btn btn-outline-primary btn-sm" title="Importar como persona" onclick="importUserAsPerson('${u.id}')"><i class="bi bi-person-plus"></i></button>
+          <button class="btn btn-outline-warning btn-sm" title="Resetear contraseña" onclick="resetUserPassword('${u.id}','${esc(u.email||'')}','${esc(u.displayName||'')}')"><i class="bi bi-key"></i></button>
+          <button class="btn btn-outline-danger btn-sm" title="Eliminar usuario" onclick="confirmDeleteUser('${u.id}')"><i class="bi bi-trash"></i></button>
+        </div>
+      </td>
+    </tr>`;
+  }).join('');
+
+  c.innerHTML = `
+    <div class="px-3 py-2 border-bottom d-flex align-items-center gap-3 small text-muted flex-wrap">
+      <span><i class="bi bi-people me-1 text-primary"></i><strong>${_cachedUsers.length}</strong> usuario${_cachedUsers.length!==1?'s':''}</span>
+      ${q ? `<span><i class="bi bi-funnel me-1"></i>${users.length} resultado${users.length!==1?'s':''}</span>` : ''}
+      <span><i class="bi bi-files me-1 text-primary"></i><strong>${totalFiles}</strong> archivo${totalFiles!==1?'s':''} en la nube</span>
+    </div>
+    <div class="table-responsive"><table class="table table-hover mb-0">
+    <thead><tr>
+      <th>Nombre / Email</th><th>Teléfono</th><th>DNI</th><th>Pasaporte</th>
+      <th>Cuentas</th><th>Archivos</th><th>Registro</th><th>Acciones</th>
+    </tr></thead><tbody>${rows}</tbody></table></div>`;
+}
+
 async function loadUsuarios() {
   const c       = document.getElementById('usuariosContainer');
   const statusEl = document.getElementById('fbUserStatus');
@@ -1818,64 +2008,10 @@ async function loadUsuarios() {
   const badge = document.getElementById('userBadge');
   if (badge) badge.textContent = users.length || '';
 
-  if (!users.length) {
-    c.innerHTML = `<div class="empty-state">
-      <i class="bi bi-person-check"></i>
-      <div class="fw-semibold">Ningún usuario registrado todavía</div>
-      <div class="small mt-2 text-muted">Comparte el link del portal de usuario para que se registren.<br>
-      Una vez que abran el portal en su dispositivo, aparecerán aquí automáticamente.</div>
-    </div>`;
-    return;
-  }
-
-  const totalFiles = Object.values(docCounts).reduce((a, b) => a + b, 0);
-  const rows = users.map(u => {
-    const nDocs = docCounts[u.id] || 0;
-    const docsCell = nDocs > 0
-      ? `<button class="btn btn-primary btn-sm px-2 py-1" title="Ver ${nDocs} archivo${nDocs!==1?'s':''}" onclick="openUserDocs('${u.id}','${esc(u.displayName||u.email||'')}')">
-           <i class="bi bi-folder2-open me-1"></i>${nDocs}
-         </button>`
-      : `<button class="btn btn-outline-secondary btn-sm px-2 py-1" title="Sin archivos" onclick="openUserDocs('${u.id}','${esc(u.displayName||u.email||'')}')">
-           <i class="bi bi-folder2 me-1"></i>0
-         </button>`;
-    return `
-    <tr>
-      <td>
-        <div class="fw-semibold">${esc(u.displayName||'')}</div>
-        <small class="text-muted">${esc(u.email||'')}</small>
-      </td>
-      <td>${u.phone ? esc(u.phone) : '<span class="text-muted">—</span>'}</td>
-      <td>${u.dni   ? `<span class="badge bg-light text-dark">${esc(u.dni)}</span>` : '<span class="text-muted">—</span>'}</td>
-      <td>${u.passport ? esc(u.passport) : '<span class="text-muted">—</span>'}</td>
-      <td><span class="badge-doc">${(u.bankAccounts||[]).length} cuenta${(u.bankAccounts||[]).length!==1?'s':''}</span></td>
-      <td>${docsCell}</td>
-      <td><small class="text-muted">${u.createdAt ? new Date(u.createdAt).toLocaleDateString('es-ES') : '—'}</small></td>
-      <td>
-        <div class="d-flex gap-1">
-          <button class="btn btn-outline-primary btn-sm" title="Importar como persona" onclick="importUserAsPerson('${u.id}')">
-            <i class="bi bi-person-plus"></i>
-          </button>
-          <button class="btn btn-outline-warning btn-sm" title="Resetear contraseña" onclick="resetUserPassword('${u.id}','${esc(u.email||'')}','${esc(u.displayName||'')}')">
-            <i class="bi bi-key"></i>
-          </button>
-          <button class="btn btn-outline-danger btn-sm" title="Eliminar usuario" onclick="confirmDeleteUser('${u.id}')">
-            <i class="bi bi-trash"></i>
-          </button>
-        </div>
-      </td>
-    </tr>`;
-  }).join('');
-
-  c.innerHTML = `
-    <div class="px-3 py-2 border-bottom d-flex align-items-center gap-3 small text-muted flex-wrap">
-      <span><i class="bi bi-people me-1 text-primary"></i><strong>${users.length}</strong> usuario${users.length!==1?'s':''}</span>
-      <span><i class="bi bi-files me-1 text-primary"></i><strong>${totalFiles}</strong> archivo${totalFiles!==1?'s':''} en la nube</span>
-    </div>
-    <div class="table-responsive"><table class="table table-hover mb-0">
-    <thead><tr>
-      <th>Nombre / Email</th><th>Teléfono</th><th>DNI</th><th>Pasaporte</th>
-      <th>Cuentas</th><th>Archivos</th><th>Registro</th><th>Acciones</th>
-    </tr></thead><tbody>${rows}</tbody></table></div>`;
+  // Guardar en caché y renderizar (la búsqueda filtra sin re-fetch)
+  _cachedUsers     = users;
+  _cachedDocCounts = docCounts;
+  renderUsuariosTable();
 }
 
 function importUserAsPerson(userId) {
@@ -2341,6 +2477,107 @@ function importUserProfile(e) {
   reader.readAsText(file); e.target.value = '';
 }
 
+// ── MOBILE SIDEBAR ────────────────────────────────────────
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebarOverlay');
+  const ic = document.getElementById('hamburgerIcon');
+  const open = sb.classList.toggle('open');
+  if (ov) ov.classList.toggle('show', open);
+  if (ic) ic.className = open ? 'bi bi-x-lg' : 'bi bi-list';
+}
+
+// ── DASHBOARD ─────────────────────────────────────────────
+async function loadDashboard() {
+  const elDate = document.getElementById('dashDate');
+  if (elDate) elDate.textContent = new Date().toLocaleDateString('es-ES', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric'
+  });
+
+  const personas = getPeople().length;
+  const nominas  = getPayrolls().length;
+  const users    = JSON.parse(localStorage.getItem('amio_users') || '[]');
+
+  const set = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+  set('dashNumPersonas', personas);
+  set('dashNumUsuarios', users.length);
+  set('dashNumNominas',  nominas);
+
+  const badge = document.getElementById('dashOnlineBadge');
+  if (badge) {
+    badge.textContent = _isConnected ? '🟢 Firebase conectado' : '🔴 Sin conexión';
+    badge.className   = `badge ${_isConnected ? 'bg-success' : 'bg-danger'}`;
+  }
+
+  let totalDocs = 0;
+  if (db && _isConnected) {
+    try {
+      const snap = await fbTimeout(db.ref('userDocCounts').once('value'), 5000);
+      if (snap.exists()) {
+        const obj = snap.val() || {};
+        totalDocs = Object.values(obj).reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0);
+      }
+    } catch(e) { /* silent */ }
+  }
+  set('dashNumDocs', totalDocs);
+
+  const recent = [...users]
+    .filter(u => u.createdAt)
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+    .slice(0, 6);
+
+  const rc = document.getElementById('dashRecentUsers');
+  if (rc) {
+    if (!recent.length) {
+      rc.innerHTML = '<p class="text-muted small mb-0">Ningún usuario registrado aún.</p>';
+    } else {
+      rc.innerHTML = recent.map(u => {
+        const init = (u.displayName || u.email || '?')[0].toUpperCase();
+        return `<div class="activity-item">
+          <div class="act-avatar">${esc(init)}</div>
+          <div class="flex-grow-1 min-width-0">
+            <div class="fw-semibold small text-truncate">${esc(u.displayName || u.email || 'Sin nombre')}</div>
+            <div class="text-muted" style="font-size:.75rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(u.email || '')}</div>
+          </div>
+          <div class="text-muted text-end flex-shrink-0" style="font-size:.73rem">${timeSince(u.createdAt)}</div>
+        </div>`;
+      }).join('');
+    }
+  }
+}
+
+function timeSince(iso) {
+  if (!iso) return '—';
+  const diff = (Date.now() - new Date(iso)) / 1000;
+  if (diff < 60)     return 'hace un momento';
+  if (diff < 3600)   return `hace ${Math.floor(diff/60)} min`;
+  if (diff < 86400)  return `hace ${Math.floor(diff/3600)}h`;
+  if (diff < 604800) return `hace ${Math.floor(diff/86400)} día${Math.floor(diff/86400)!==1?'s':''}`;
+  return fmtDate(iso);
+}
+
+// ── EXPORTAR USUARIOS EXCEL ───────────────────────────────
+function exportUsuariosExcel() {
+  if (!window.XLSX) { toast('Librería Excel no disponible (requiere internet)', 'error'); return; }
+  const users = JSON.parse(localStorage.getItem('amio_users') || '[]');
+  if (!users.length) { toast('No hay usuarios para exportar', 'error'); return; }
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.json_to_sheet(users.map(u => ({
+    'Nombre':      u.displayName  || '',
+    'Email':       u.email        || '',
+    'Teléfono':    u.phone        || '',
+    'DNI':         u.dni          || '',
+    'Pasaporte':   u.passport     || '',
+    'Cuentas':     (u.bankAccounts || []).length,
+    'Wallets':     (u.wallets || []).length,
+    'Registrado':  u.createdAt ? new Date(u.createdAt).toLocaleDateString('es-ES') : '—',
+    'Actualizado': u.updatedAt ? new Date(u.updatedAt).toLocaleDateString('es-ES') : '—',
+  })));
+  XLSX.utils.book_append_sheet(wb, ws, 'Usuarios');
+  XLSX.writeFile(wb, `APP_MIO_usuarios_${new Date().toISOString().slice(0,10)}.xlsx`);
+  toast(`✅ Excel exportado — ${users.length} usuarios`);
+}
+
 // ── EVENT LISTENERS ───────────────────────────────────────
 document.getElementById('loginForm').addEventListener('submit', e => {
   e.preventDefault();
@@ -2349,7 +2586,7 @@ document.getElementById('loginForm').addEventListener('submit', e => {
     err.classList.add('d-none');
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appContainer').style.display = 'flex';
-    navigate('people');
+    navigate('dashboard');
   } else { err.classList.remove('d-none'); }
 });
 document.getElementById('searchInput').addEventListener('input', function() { renderPeopleList(this.value); });
@@ -2369,7 +2606,7 @@ async function init() {
     const count = JSON.parse(localStorage.getItem('amio_users')||'[]').length;
     const badge = document.getElementById('userBadge');
     if (badge && count > 0) badge.textContent = count;
-    navigate('people');
+    navigate('dashboard');
   }
 }
 document.addEventListener('DOMContentLoaded', init);
