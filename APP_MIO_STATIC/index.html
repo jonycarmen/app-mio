@@ -827,11 +827,29 @@ function startUsersListener() {
     setCloudStatus(true);
     const usersObj = snapshot.val() || {};
     const cloudUsers = Object.values(usersObj);
-    // REEMPLAZAR (no fusionar) — la nube es la fuente de verdad.
-    // El merge anterior re-añadía usuarios ya borrados desde el caché local.
-    localStorage.setItem('amio_users', JSON.stringify(cloudUsers));
+
+    // Auto-dedup: keep most recent entry per email, delete duplicates from Firebase
+    const byEmail = {};
+    cloudUsers.forEach(u => {
+      const key = (u.email || '').toLowerCase().trim() || ('__noemail__' + u.id);
+      if (!byEmail[key]) { byEmail[key] = u; return; }
+      const ta = new Date(byEmail[key].updatedAt || byEmail[key].createdAt || 0).getTime();
+      const tb = new Date(u.updatedAt || u.createdAt || 0).getTime();
+      if (tb > ta) byEmail[key] = u;
+    });
+    const deduped = Object.values(byEmail);
+
+    // Silently remove duplicate nodes from Firebase (no-op if rules don't allow yet)
+    if (deduped.length < cloudUsers.length) {
+      const idsToKeep = new Set(deduped.map(u => u.id));
+      cloudUsers.filter(u => u.id && !idsToKeep.has(u.id)).forEach(dup => {
+        db.ref('usuarios/' + dup.id).remove().catch(() => {});
+      });
+    }
+
+    localStorage.setItem('amio_users', JSON.stringify(deduped));
     const badge = document.getElementById('userBadge');
-    if (badge) badge.textContent = cloudUsers.length || '';
+    if (badge) badge.textContent = deduped.length || '';
     const v = document.getElementById('viewUsuarios');
     if (v && v.style.display !== 'none') loadUsuarios();
   }, err => { console.warn('Firebase error:', err); setCloudStatus(false); });
