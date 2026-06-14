@@ -1,7 +1,7 @@
-// APP MIO — Service Worker v2
-// v2: HTML en network-first para recibir siempre el código más reciente
+// APP MIO — Service Worker v3
+// v3: bump para limpiar caché del deploy roto anterior
 
-const CACHE = 'app-mio-v2';
+const CACHE = 'app-mio-v3';
 
 // Archivos estáticos (iconos, manifests) — cache-first
 const PRECACHE = [
