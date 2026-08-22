@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-06-12 full-update -->
+<!DOCTYPE html><!-- v2026-08-22 whatsapp-btn + mejoras -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -1888,8 +1888,9 @@ function renderUsuariosTable() {
       <td>${docsCell}</td>
       <td><small class="text-muted">${u.createdAt ? new Date(u.createdAt).toLocaleDateString('es-ES') : '—'}</small></td>
       <td>
-        <div class="d-flex gap-1">
+        <div class="d-flex gap-1 flex-wrap">
           <button class="btn btn-outline-primary btn-sm" title="Importar como persona" onclick="importUserAsPerson('${u.id}')"><i class="bi bi-person-plus"></i></button>
+          ${u.phone ? `<a class="btn btn-outline-success btn-sm" title="WhatsApp" href="https://wa.me/${u.phone.replace(/\D/g,'')}" target="_blank"><i class="bi bi-whatsapp"></i></a>` : ''}
           <button class="btn btn-outline-warning btn-sm" title="Resetear contraseña" onclick="resetUserPassword('${u.id}','${esc(u.email||'')}','${esc(u.displayName||'')}')"><i class="bi bi-key"></i></button>
           <button class="btn btn-outline-danger btn-sm" title="Eliminar usuario" onclick="confirmDeleteUser('${u.id}')"><i class="bi bi-trash"></i></button>
         </div>

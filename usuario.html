@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-05-29 PWA -->
+<!DOCTYPE html><!-- v2026-08-22 hamburger-movil + mejoras -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -104,10 +104,19 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 @media (max-width: 768px) {
   .sidebar { transform: translateX(-100%); transition: transform .3s; }
   .sidebar.open { transform: translateX(0); }
-  .main-content { margin-left: 0; width: 100%; padding: 1rem; }
-  .mobile-menu-btn { display: block !important; }
+  .main-content { margin-left: 0; width: 100%; padding: 1rem; padding-top: 4.5rem !important; }
+  .btn-hamburger { display: flex; }
 }
-.mobile-menu-btn { display: none; }
+.btn-hamburger {
+  display: none; position: fixed; top: .85rem; left: .85rem; z-index: 200;
+  background: var(--primary); color: #fff; border: none; border-radius: 10px;
+  width: 44px; height: 44px; font-size: 1.2rem; cursor: pointer;
+  align-items: center; justify-content: center;
+  box-shadow: 0 4px 12px rgba(8,145,178,.4); transition: background .15s;
+}
+.btn-hamburger:hover { background: var(--primary-dark); }
+.sidebar-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,.45); z-index: 99; }
+.sidebar-overlay.show { display: block; }
 </style>
 </head>
 <body>
@@ -187,6 +196,11 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
 </div>
 
 <!-- ==================== APP ==================== -->
+<button class="btn-hamburger" id="hamburgerBtn" onclick="toggleSidebar()" style="display:none">
+  <i class="bi bi-list" id="hamburgerIcon"></i>
+</button>
+<div class="sidebar-overlay" id="sidebarOverlay" onclick="toggleSidebar()"></div>
+
 <div id="appContainer" style="display:none">
   <!-- SIDEBAR -->
   <nav class="sidebar" id="sidebar">
@@ -944,6 +958,8 @@ function doLogout() {
   clearSess(); currentUserId=null;
   document.getElementById('appContainer').style.display = 'none';
   document.getElementById('authScreen').style.display   = 'flex';
+  document.getElementById('hamburgerBtn').style.display = 'none';
+  document.getElementById('sidebarOverlay').classList.remove('show');
   document.getElementById('lEmail').value='';
   document.getElementById('lPass').value='';
 }
@@ -956,11 +972,30 @@ function startApp() {
   document.getElementById('sidebarEmail').textContent = u.email;
   document.getElementById('authScreen').style.display   = 'none';
   document.getElementById('appContainer').style.display = 'flex';
+  document.getElementById('hamburgerBtn').style.display = '';
   navigate('perfil');
 }
 
 // ── NAVIGATION ────────────────────────────────────────────
+function toggleSidebar() {
+  const sb = document.getElementById('sidebar');
+  const ov = document.getElementById('sidebarOverlay');
+  const ic = document.getElementById('hamburgerIcon');
+  const open = sb.classList.toggle('open');
+  if (ov) ov.classList.toggle('show', open);
+  if (ic) ic.className = open ? 'bi bi-x-lg' : 'bi bi-list';
+}
+
 function navigate(view) {
+  // Cerrar sidebar en móvil al navegar
+  const _sb = document.getElementById('sidebar');
+  const _ov = document.getElementById('sidebarOverlay');
+  if (_sb && _sb.classList.contains('open')) {
+    _sb.classList.remove('open');
+    if (_ov) _ov.classList.remove('show');
+    const _ic = document.getElementById('hamburgerIcon');
+    if (_ic) _ic.className = 'bi bi-list';
+  }
   ['viewPerfil','viewDocs','viewExport'].forEach(v => document.getElementById(v).style.display='none');
   ['navPerfil','navDocs','navExport'].forEach(n => document.getElementById(n).classList.remove('active'));
   if (view==='perfil')   { document.getElementById('viewPerfil').style.display='block';  document.getElementById('navPerfil').classList.add('active'); loadPerfil(); }
