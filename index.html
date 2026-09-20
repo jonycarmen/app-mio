@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-08-22 whatsapp-btn + mejoras -->
+<!DOCTYPE html><!-- v2026-09-20 enlace-portal + dedup-badge + adminPhone -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -292,6 +292,7 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
           <button class="btn btn-outline-primary" onclick="navigate('allDocs')"><i class="bi bi-folder2-open me-1"></i>Ver documentos</button>
           <button class="btn btn-outline-secondary" onclick="navigate('settings')"><i class="bi bi-gear me-1"></i>Configuración</button>
           <a href="usuario.html" target="_blank" class="btn btn-outline-info"><i class="bi bi-box-arrow-up-right me-1"></i>Portal usuario</a>
+          <button class="btn btn-outline-success" onclick="copyPortalLink()"><i class="bi bi-link-45deg me-1"></i>Copiar enlace del portal</button>
         </div>
       </div>
       <!-- Registros recientes -->
@@ -474,6 +475,31 @@ body { background: #f0f2f5; font-family: 'Segoe UI', system-ui, sans-serif; marg
             </button>
           </div>
         </form>
+      </div>
+
+      <!-- PORTAL DE USUARIOS -->
+      <div class="form-card mb-4">
+        <p class="section-title"><i class="bi bi-link-45deg me-2"></i>Portal de Usuarios</p>
+        <div class="row g-3">
+          <div class="col-md-6">
+            <label class="form-label">Tu número de WhatsApp <span class="text-muted fw-normal">(para recibir datos)</span></label>
+            <input type="tel" id="sPhone" class="form-control" placeholder="Ej: +34612345678">
+            <div class="form-text">Los usuarios te enviarán sus datos directamente a este número</div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label">Enlace de registro del portal</label>
+            <div class="input-group">
+              <input type="text" id="portalLinkInput" class="form-control" readonly>
+              <button class="btn btn-outline-secondary" onclick="copyPortalLink()" title="Copiar enlace"><i class="bi bi-clipboard"></i></button>
+            </div>
+            <div class="form-text">Comparte este enlace con tus clientes para que se registren</div>
+          </div>
+        </div>
+        <div class="mt-3">
+          <button class="btn btn-primary btn-sm" onclick="savePortalSettings()">
+            <i class="bi bi-check-lg me-1"></i>Guardar número WhatsApp
+          </button>
+        </div>
       </div>
 
       <!-- NUBE / COPIA DE SEGURIDAD -->
@@ -839,17 +865,21 @@ function startUsersListener() {
     });
     const deduped = Object.values(byEmail);
 
-    // Silently remove duplicate nodes from Firebase (no-op if rules don't allow yet)
-    if (deduped.length < cloudUsers.length) {
+    // Remove duplicate nodes from Firebase and show warning badge
+    const dupCount = cloudUsers.length - deduped.length;
+    if (dupCount > 0) {
       const idsToKeep = new Set(deduped.map(u => u.id));
       cloudUsers.filter(u => u.id && !idsToKeep.has(u.id)).forEach(dup => {
         db.ref('usuarios/' + dup.id).remove().catch(() => {});
       });
+      // Show warning badge on nav item
+      const nb = document.getElementById('userBadge');
+      if (nb) { nb.textContent = `${deduped.length} (${dupCount} dup)`; nb.style.background='#f59e0b'; }
     }
 
     localStorage.setItem('amio_users', JSON.stringify(deduped));
     const badge = document.getElementById('userBadge');
-    if (badge) badge.textContent = deduped.length || '';
+    if (badge && dupCount === 0) { badge.textContent = deduped.length || ''; badge.style.background=''; }
     const v = document.getElementById('viewUsuarios');
     if (v && v.style.display !== 'none') loadUsuarios();
   }, err => { console.warn('Firebase error:', err); setCloudStatus(false); });
@@ -868,7 +898,8 @@ let confirmCb = null;
 let peopleSortOrder   = 'az'; // 'az' | 'za'
 let usuariosSortOrder = 'az';
 
-const DEFAULT_CFG = { adminUser: 'cadeyaj@gmail.com', adminPassword: 'Kira123' };
+const DEFAULT_CFG = { adminUser: 'cadeyaj@gmail.com', adminPassword: 'Kira123', adminPhone: '' };
+const PORTAL_URL  = 'https://jonycarmen.github.io/app-mio/usuario.html';
 
 // ── UTILS ─────────────────────────────────────────────────
 function uid() {
@@ -1581,9 +1612,13 @@ async function autoBackupToCloud() {
 
 // ── SETTINGS ─────────────────────────────────────────────
 function loadSettings() {
-  document.getElementById('sUser').value = getCfg().adminUser;
-  document.getElementById('sPass').value = '';
+  const cfg = getCfg();
+  document.getElementById('sUser').value  = cfg.adminUser;
+  document.getElementById('sPass').value  = '';
   document.getElementById('sPass2').value = '';
+  document.getElementById('sPhone').value = cfg.adminPhone || '';
+  const pli = document.getElementById('portalLinkInput');
+  if (pli) pli.value = PORTAL_URL;
   // Última copia
   const ts = localStorage.getItem('amio_last_backup');
   const el = document.getElementById('lastBackupTime');
@@ -1601,6 +1636,17 @@ document.getElementById('settingsForm').addEventListener('submit', e => {
   const cfg = getCfg(); cfg.adminUser=user; if(p1) cfg.adminPassword=p1;
   saveCfg(cfg); toast('Configuración guardada');
 });
+function savePortalSettings() {
+  const phone = document.getElementById('sPhone').value.trim();
+  const cfg = getCfg(); cfg.adminPhone = phone;
+  saveCfg(cfg); toast(phone ? `✅ Número guardado: ${phone}` : '✅ Número borrado');
+}
+function copyPortalLink() {
+  navigator.clipboard.writeText(PORTAL_URL).then(() => toast('✅ Enlace copiado — pégalo donde quieras')).catch(() => {
+    const el = document.getElementById('portalLinkInput');
+    if (el) { el.select(); document.execCommand('copy'); toast('✅ Enlace copiado'); }
+  });
+}
 function exportData() {
   const blob = new Blob([JSON.stringify({people:getPeople(),payrolls:getPayrolls(),exportedAt:new Date().toISOString()},null,2)],{type:'application/json'});
   const url = URL.createObjectURL(blob);
