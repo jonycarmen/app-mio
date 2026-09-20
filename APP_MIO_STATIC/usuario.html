@@ -1,4 +1,4 @@
-<!DOCTYPE html><!-- v2026-08-22 hamburger-movil + mejoras -->
+<!DOCTYPE html><!-- v2026-09-20 whatsapp-admin + mejoras -->
 <html lang="es">
 <head>
 <meta charset="UTF-8">
@@ -1295,7 +1295,6 @@ function shareWhatsApp() {
   if (!link) { toast('Error al generar enlace', 'error'); return; }
   const u = getMe();
   if (link.length > 4000) {
-    // Datos muy largos → descargar JSON en su lugar
     toast('Perfil grande — descargando JSON para enviar manualmente', 'error');
     exportJSON(); return;
   }
@@ -1303,7 +1302,13 @@ function shareWhatsApp() {
   document.getElementById('shareLinkBox').style.display = 'block';
   document.getElementById('shareLinkInput').value = link;
   const msg = `Hola! Soy ${u.displayName}. Aquí están mis datos para registrarme en el sistema:\n${link}`;
-  window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+  // Usar teléfono del admin si está configurado en el panel
+  let adminPhone = '';
+  try { adminPhone = (JSON.parse(localStorage.getItem('amio_cfg') || '{}').adminPhone || '').replace(/\D/g,''); } catch(e) {}
+  const waUrl = adminPhone
+    ? `https://wa.me/${adminPhone}?text=${encodeURIComponent(msg)}`
+    : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+  window.open(waUrl, '_blank');
 }
 
 function copyShareLink() {
