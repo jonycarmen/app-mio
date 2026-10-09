@@ -825,6 +825,18 @@ function fbTimeout(promise, ms = 8000) {
   return Promise.race([promise, timer]);
 }
 
+function _updateUserBadge(count) {
+  const b = document.getElementById('userBadge');
+  if (!b) return;
+  if (_pendingDupCount > 0) {
+    b.textContent = `${count} ⚠️${_pendingDupCount}dup`;
+    b.style.cssText = 'background:#f59e0b;color:#fff;font-size:.7rem';
+  } else {
+    b.textContent = count || '';
+    b.style.cssText = '';
+  }
+}
+
 function setCloudStatus(online) {
   const el = document.getElementById('cloudStatusBadge');
   if (el) {
@@ -865,21 +877,17 @@ function startUsersListener() {
     });
     const deduped = Object.values(byEmail);
 
-    // Remove duplicate nodes from Firebase and show warning badge
-    const dupCount = cloudUsers.length - deduped.length;
-    if (dupCount > 0) {
+    // Remove duplicate nodes from Firebase and store count for badge
+    _pendingDupCount = cloudUsers.length - deduped.length;
+    if (_pendingDupCount > 0) {
       const idsToKeep = new Set(deduped.map(u => u.id));
       cloudUsers.filter(u => u.id && !idsToKeep.has(u.id)).forEach(dup => {
         db.ref('usuarios/' + dup.id).remove().catch(() => {});
       });
-      // Show warning badge on nav item
-      const nb = document.getElementById('userBadge');
-      if (nb) { nb.textContent = `${deduped.length} (${dupCount} dup)`; nb.style.background='#f59e0b'; }
     }
 
     localStorage.setItem('amio_users', JSON.stringify(deduped));
-    const badge = document.getElementById('userBadge');
-    if (badge && dupCount === 0) { badge.textContent = deduped.length || ''; badge.style.background=''; }
+    _updateUserBadge(deduped.length);
     const v = document.getElementById('viewUsuarios');
     if (v && v.style.display !== 'none') loadUsuarios();
   }, err => { console.warn('Firebase error:', err); setCloudStatus(false); });
@@ -897,6 +905,7 @@ let currentTab = 'docs';
 let confirmCb = null;
 let peopleSortOrder   = 'az'; // 'az' | 'za'
 let usuariosSortOrder = 'az';
+let _pendingDupCount  = 0;
 
 const DEFAULT_CFG = { adminUser: 'cadeyaj@gmail.com', adminPassword: 'Kira123', adminPhone: '' };
 const PORTAL_URL  = 'https://jonycarmen.github.io/app-mio/usuario.html';
@@ -2070,8 +2079,7 @@ async function loadUsuarios() {
     return usuariosSortOrder === 'az' ? fa.localeCompare(fb,'es') : fb.localeCompare(fa,'es');
   });
 
-  const badge = document.getElementById('userBadge');
-  if (badge) badge.textContent = users.length || '';
+  _updateUserBadge(users.length);
 
   // Guardar en caché y renderizar (la búsqueda filtra sin re-fetch)
   _cachedUsers     = users;
@@ -2669,8 +2677,7 @@ async function init() {
     document.getElementById('loginScreen').style.display = 'none';
     document.getElementById('appContainer').style.display = 'flex';
     const count = JSON.parse(localStorage.getItem('amio_users')||'[]').length;
-    const badge = document.getElementById('userBadge');
-    if (badge && count > 0) badge.textContent = count;
+    if (count > 0) _updateUserBadge(count);
     navigate('dashboard');
   }
 }
