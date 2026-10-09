@@ -855,6 +855,12 @@ function setCloudStatus(online) {
     el2.className = online ? 'badge text-bg-success' : 'badge text-bg-danger';
     el2.style.fontSize = '.75rem';
   }
+  // También actualiza el badge del dashboard en tiempo real
+  const el3 = document.getElementById('dashOnlineBadge');
+  if (el3) {
+    el3.textContent = online ? '🟢 Firebase conectado' : '🔴 Sin conexión';
+    el3.className = `badge ${online ? 'bg-success' : 'bg-danger'}`;
+  }
 }
 
 function startUsersListener() {
