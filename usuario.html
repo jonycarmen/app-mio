@@ -696,12 +696,15 @@ async function syncDocToCloud(doc, rawBuf) {
       return;
     }
     const b64 = arrayBufToBase64(buf);
-    await fbTimeout(db.ref('userDocuments/' + doc.userId + '/' + doc.id).set({
+    const docMeta = {
       id: doc.id, userId: doc.userId, filename: doc.filename,
       mimeType: doc.mimeType, size: buf.byteLength,
       category: doc.category || '', description: doc.description || '',
-      uploadedAt: doc.uploadedAt, data: b64,
-    }), 20000);
+      uploadedAt: doc.uploadedAt,
+    };
+    await fbTimeout(db.ref('userDocuments/' + doc.userId + '/' + doc.id).set({...docMeta, data: b64}), 20000);
+    // también guardar metadatos sin base64 para carga rápida del admin
+    db.ref('userDocsMeta/' + doc.userId + '/' + doc.id).set(docMeta).catch(() => {});
     pushDocCount(); // actualizar contador ligero (fire-and-forget)
   } catch(e) { console.warn('syncDocToCloud:', e.code || e.message); }
 }
@@ -710,6 +713,7 @@ async function removeDocFromCloud(docId) {
   if (!db || !currentUserId) return;
   try {
     await fbTimeout(db.ref('userDocuments/' + currentUserId + '/' + docId).remove(), 8000);
+    db.ref('userDocsMeta/' + currentUserId + '/' + docId).remove().catch(() => {});
     pushDocCount(); // actualizar contador ligero
   } catch(e) { console.warn('removeDocFromCloud:', e.code || e.message); }
 }

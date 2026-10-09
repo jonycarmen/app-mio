@@ -2307,9 +2307,26 @@ async function openUserDocs(userId, userName) {
   }
 }
 
-function downloadCloudDoc(docId) {
-  const d = window._currentUserDocs[docId];
+async function downloadCloudDoc(docId) {
+  let d = window._currentUserDocs[docId];
   if (!d) { toast('Documento no encontrado', 'error'); return; }
+
+  if (!d.data) {
+    // data not in memory (loaded from meta node) — fetch on demand
+    toast('Obteniendo archivo…');
+    try {
+      const snap = await fbTimeout(db.ref('userDocuments/' + d._userId + '/' + docId).once('value'), 15000);
+      if (!snap || !snap.exists()) { toast('Archivo no encontrado en la nube', 'error'); return; }
+      const full = snap.val();
+      if (!full || !full.data) { toast('El archivo no tiene datos en la nube', 'error'); return; }
+      d.data = full.data;
+      d.mimeType = full.mimeType || d.mimeType;
+      // set thumbnail if visible
+      const img = document.querySelector(`img[data-docid="${docId}"]`);
+      if (img && d.mimeType && d.mimeType.startsWith('image/')) img.src = `data:${d.mimeType};base64,${d.data}`;
+    } catch(e) { toast('Error al obtener archivo: ' + (e.message || e.code || ''), 'error'); return; }
+  }
+
   try {
     const byteChars = atob(d.data);
     const bytes = new Uint8Array(byteChars.length);
@@ -2331,111 +2348,140 @@ function _setAllDocsLive(active) {
   if (badge) badge.style.display = active ? '' : 'none';
 }
 
-function _processAllDocsSnap(snap) {
-  const c = document.getElementById('allDocsContainer');
-  if (!c) return; // ya no estamos en la vista
-
-  if (!snap.exists()) {
-    _allDocsLoaded = false;
-    _setAllDocsLive(false);
-    c.innerHTML = `<div class="empty-state"><i class="bi bi-folder2-open"></i>
-      <div>Ningún cliente ha subido documentos aún</div>
-      <div class="small text-muted mt-1">Se actualizará solo cuando los clientes suban archivos</div></div>`;
-    return;
-  }
-
-  const rootVal = snap.val() || {};
-  const users   = JSON.parse(localStorage.getItem('amio_users') || '[]');
-  const nameOf  = id => {
-    const u = users.find(u => u.id === id);
-    return u ? (u.displayName || u.email || id) : id;
-  };
-
-  _allDocsCache = [];
-  for (const [userId, userDocsObj] of Object.entries(rootVal)) {
-    if (!userDocsObj || typeof userDocsObj !== 'object') continue;
-    const userName = nameOf(userId);
-    for (const [, doc] of Object.entries(userDocsObj)) {
-      if (!doc || typeof doc !== 'object' || !doc.id) continue;
-      _allDocsCache.push({...doc, _userName: userName, _userId: userId});
-    }
-  }
-
-  _allDocsCache.sort((a, b) => (b.uploadedAt || '').localeCompare(a.uploadedAt || ''));
-
-  const badge = document.getElementById('allDocsBadge');
-  if (badge) badge.textContent = _allDocsCache.length || '';
-
-  _setAllDocsLive(true);
-  _allDocsLoaded = true;
-  renderAllDocs();
-}
+// ── loadAllDocs — usa userDocsMeta (sin base64) para carga rápida ─────────────
+// Flujo:
+//   1. Lee userDocsMeta (tiny, sin base64) → lista inmediata
+//   2. Para usuarios legacy (tienen docs en userDocuments pero no en userDocsMeta)
+//      los carga uno a uno y los migra automáticamente a userDocsMeta
+//   3. downloadCloudDoc() obtiene el base64 sólo cuando se necesita descargar
 
 function loadAllDocs() {
-  // Desconectar listener anterior si existía
   if (_unsubAllDocs) { _unsubAllDocs(); _unsubAllDocs = null; }
   _allDocsLoaded = false;
   _setAllDocsLive(false);
+  _allDocsCache = [];
 
   const c = document.getElementById('allDocsContainer');
-
   if (!db) {
-    c.innerHTML = `<div class="alert alert-warning m-0">
-      <i class="bi bi-wifi-off me-2"></i>Firebase no inicializado. Recarga la página.</div>`;
+    c.innerHTML = `<div class="alert alert-warning m-0"><i class="bi bi-wifi-off me-2"></i>Firebase no inicializado. Recarga la página.</div>`;
     return;
   }
-
   if (!_isConnected) {
-    c.innerHTML = `<div class="alert alert-warning m-0">
-      <i class="bi bi-wifi-off me-2"></i>Esperando conexión a Firebase…
-      <div class="mt-2 small">La sección se cargará automáticamente al conectar.</div></div>`;
-    // Reintentar cuando se conecte
-    const iv = setInterval(() => {
-      if (_isConnected) { clearInterval(iv); loadAllDocs(); }
-    }, 1500);
+    c.innerHTML = `<div class="alert alert-warning m-0"><i class="bi bi-wifi-off me-2"></i>Esperando conexión a Firebase…<div class="mt-2 small">Se cargará automáticamente al conectar.</div></div>`;
+    const iv = setInterval(() => { if (_isConnected) { clearInterval(iv); loadAllDocs(); } }, 1500);
     return;
   }
 
-  c.innerHTML = '<div class="text-center text-muted py-5"><div class="spinner-border mb-2"></div><div>Conectando en tiempo real…</div></div>';
+  let cancelled = false;
+  _unsubAllDocs = () => { cancelled = true; };
 
-  // Listener en tiempo real
-  const ref = db.ref('userDocuments');
-  ref.on('value',
-    snap => _processAllDocsSnap(snap),
-    err  => {
-      _setAllDocsLive(false);
-      const isTimeout = err.code === 'TIMEOUT' || String(err.message).includes('TIMEOUT');
-      const isPerm    = err.code === 'PERMISSION_DENIED' || String(err.message).includes('permission');
+  c.innerHTML = `<div class="text-center text-muted py-5"><div class="spinner-border mb-2"></div><div id="allDocsProgressMsg">Cargando…</div></div>`;
 
-      const c2 = document.getElementById('allDocsContainer');
-      if (!c2) return;
+  const users  = JSON.parse(localStorage.getItem('amio_users') || '[]');
+  const nameOf = id => { const u = users.find(u => u.id === id); return u ? (u.displayName || u.email || id) : id; };
+  const setMsg = t  => { const el = document.getElementById('allDocsProgressMsg'); if (el) el.textContent = t; };
 
-      if (isTimeout || isPerm) {
-        c2.innerHTML = `<div class="alert alert-danger m-0">
-          <i class="bi bi-shield-lock me-2"></i>
-          <strong>Firebase Rules bloquean la lectura de documentos.</strong><br>
-          <div class="mt-2 small">
-            Para solucionarlo, ve a
-            <a href="https://console.firebase.google.com" target="_blank" class="alert-link">console.firebase.google.com</a>
-            → tu proyecto → <b>Realtime Database → Reglas</b> y asegúrate de que incluya:
-          </div>
-          <pre class="mt-2 mb-1 p-2 bg-light rounded" style="font-size:.8rem">{ "rules": { ".read": true, ".write": true } }</pre>
-          <div class="small text-muted">Después de publicar las reglas, pulsa <b>Reconectar</b>.</div>
-          <button class="btn btn-sm btn-primary mt-2" onclick="loadAllDocs()">
-            <i class="bi bi-arrow-clockwise me-1"></i>Reconectar
-          </button>
-        </div>`;
-      } else {
-        c2.innerHTML = `<div class="alert alert-danger m-0">
-          <i class="bi bi-exclamation-triangle me-2"></i>Error Firebase: <code>${err.code || err.message}</code>
-          <button class="btn btn-sm btn-primary ms-2" onclick="loadAllDocs()">
-            <i class="bi bi-arrow-clockwise me-1"></i>Reintentar
-          </button>
-        </div>`;
+  // Paso 1: cargar metadatos ligeros + contadores en paralelo
+  Promise.all([
+    db.ref('userDocsMeta').once('value').catch(() => null),
+    db.ref('userDocCounts').once('value').catch(() => null),
+  ]).then(([metaSnap, countsSnap]) => {
+    if (cancelled) return;
+
+    const metaVal   = (metaSnap   && metaSnap.val())   || {};
+    const countsVal = (countsSnap && countsSnap.val()) || {};
+
+    // Procesar docs del nodo rápido
+    for (const [userId, userDocs] of Object.entries(metaVal)) {
+      if (!userDocs) continue;
+      const userName = nameOf(userId);
+      for (const [, doc] of Object.entries(userDocs)) {
+        if (!doc || !doc.id) continue;
+        _allDocsCache.push({...doc, _userName: userName, _userId: userId});
       }
     }
-  );
-  _unsubAllDocs = () => ref.off();
+
+    // Usuarios legacy: tienen documentos (count>0) pero aún no están en userDocsMeta
+    const legacyUsers = users.filter(u => u.id && !metaVal[u.id] && (countsVal[u.id] > 0));
+
+    if (!legacyUsers.length) {
+      _finishAllDocsLoad(cancelled);
+      return;
+    }
+
+    // Paso 2: cargar legacy uno a uno (y migrar a userDocsMeta para la próxima vez)
+    setMsg(`Migrando documentos de ${legacyUsers.length} usuario(s)…`);
+    let done = 0, nextIdx = 0;
+    const CONC = 3;
+
+    function doNext() {
+      if (cancelled || nextIdx >= legacyUsers.length) return;
+      const user = legacyUsers[nextIdx++];
+      db.ref('userDocuments/' + user.id).once('value').then(snap => {
+        if (!cancelled && snap && snap.exists()) {
+          const userName    = nameOf(user.id);
+          const metaUpdates = {};
+          snap.forEach(child => {
+            const doc = child.val();
+            if (!doc || !doc.id) return;
+            const {data: _stripped, ...meta} = doc; // quitar base64 del cache
+            _allDocsCache.push({...meta, _userName: userName, _userId: user.id});
+            metaUpdates[child.key] = meta;
+          });
+          // Migrar a userDocsMeta (best-effort, silencioso)
+          if (Object.keys(metaUpdates).length) {
+            db.ref('userDocsMeta/' + user.id).update(metaUpdates).catch(() => {});
+          }
+        }
+        done++;
+        setMsg(`Cargando… (${done}/${legacyUsers.length} usuarios)`);
+        doNext();
+        if (done === legacyUsers.length) _finishAllDocsLoad(cancelled);
+      }).catch(() => {
+        done++;
+        doNext();
+        if (done === legacyUsers.length) _finishAllDocsLoad(cancelled);
+      });
+    }
+
+    for (let i = 0; i < Math.min(CONC, legacyUsers.length); i++) doNext();
+
+  }).catch(err => {
+    if (cancelled) return;
+    const isPerm = err.code === 'PERMISSION_DENIED' || String(err.message).includes('permission');
+    const c2 = document.getElementById('allDocsContainer');
+    if (!c2) return;
+    if (isPerm) {
+      c2.innerHTML = `<div class="alert alert-danger m-0">
+        <i class="bi bi-shield-lock me-2"></i>
+        <strong>Firebase Rules bloquean la lectura de documentos.</strong><br>
+        <div class="mt-2 small">Ve a <a href="https://console.firebase.google.com" target="_blank" class="alert-link">console.firebase.google.com</a>
+        → tu proyecto → <b>Realtime Database → Reglas</b> y añade <code>userDocsMeta</code> con permisos de lectura.</div>
+        <button class="btn btn-sm btn-primary mt-2" onclick="loadAllDocs()">
+          <i class="bi bi-arrow-clockwise me-1"></i>Reconectar
+        </button>
+      </div>`;
+    } else {
+      c2.innerHTML = `<div class="alert alert-danger m-0">
+        <i class="bi bi-exclamation-triangle me-2"></i>Error Firebase: <code>${err.code || err.message}</code>
+        <button class="btn btn-sm btn-primary ms-2" onclick="loadAllDocs()">
+          <i class="bi bi-arrow-clockwise me-1"></i>Reintentar
+        </button>
+      </div>`;
+    }
+  });
+}
+
+function _finishAllDocsLoad(cancelled) {
+  if (cancelled) return;
+  const c = document.getElementById('allDocsContainer');
+  if (!c) return;
+  _allDocsCache.sort((a, b) => (b.uploadedAt || '').localeCompare(a.uploadedAt || ''));
+  const badge = document.getElementById('allDocsBadge');
+  if (badge) badge.textContent = _allDocsCache.length || '';
+  _setAllDocsLive(false);
+  _allDocsLoaded = true;
+  renderAllDocs();
 }
 
 function filterAllDocs(f) {
